@@ -1,0 +1,49 @@
+[project]
+name = "aef-loader"
+version = "0.1.0"
+description = "Efficient loader for Alpha Earth Foundations embeddings using virtual-tiff and dask"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Jake Wilkins" }
+]
+dependencies = [
+    "virtual-tiff>=0.3.1",
+    "virtualizarr>=2.0.0",
+    "obstore>=0.4.0",
+    "numpy>=1.24.0",
+    "pyarrow>=14.0.1",
+    "geopandas>=0.14.0",
+    "xarray>=2024.1.0",
+    "dask[array]>=2024.1.0",
+    "zarr>=3.0.0",
+    "shapely>=2.0.2",
+    "affine>=2.4.0",
+    "pyproj>=3.6.1",
+    "odc-geo>=0.4.10",
+    "rasterio>=1.4.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff",
+    "ty"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aef_loader"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: Fast unit tests without external dependencies",
+    "integration: Integration tests that may require external services",
+    "requires_gcp: Tests that require authenticated GCP credentials",
+]

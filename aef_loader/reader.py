@@ -85,7 +85,7 @@ def _get_affine_from_model_pixel_scale_and_tiepoint(
         An affine transform calculated from these values.
     """
     sx, sy, _ = pixel_scale
-    x, y = tiepoint[0], tiepoint[4]
+    x, y = tiepoint[3], tiepoint[4]
 
     # TODO: validate the positive sy is correct, as I believe all the AEF images are bottom up
     return Affine(sx, 0, x, 0, sy, y)

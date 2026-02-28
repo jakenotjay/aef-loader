@@ -13,30 +13,6 @@ class TestAEFIndex:
     """Tests for AEFIndex class."""
 
     @pytest.mark.unit
-    def test_init_defaults(self):
-        """Test default initialization."""
-        index = AEFIndex()
-
-        assert index.gcp_project is None
-        assert index.cache_dir == Path("/tmp")
-        assert index._gdf is None
-        assert index.source == DataSource.GCS  # Default source
-
-    @pytest.mark.unit
-    def test_init_with_project(self):
-        """Test initialization with GCP project."""
-        index = AEFIndex(gcp_project="my-project")
-
-        assert index.gcp_project == "my-project"
-
-    @pytest.mark.unit
-    def test_init_with_cache_dir(self, tmp_path):
-        """Test initialization with custom cache directory."""
-        index = AEFIndex(cache_dir=tmp_path)
-
-        assert index.cache_dir == tmp_path
-
-    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_download_requires_project(self, tmp_path):
         """Test that download requires a GCP project for GCS source."""

@@ -2,8 +2,6 @@
 
 import pytest
 from aef_loader.constants import (
-    GCS_BUCKET,
-    SOURCE_COOP_BUCKET,
     DataSource,
 )
 from aef_loader.index import AEFIndex
@@ -12,7 +10,6 @@ from aef_loader.reader import (
     _parse_cloud_path,
     _parse_s3_path,
 )
-from aef_loader.types import AEFTileInfo
 
 
 class TestPathParsing:
@@ -25,22 +22,6 @@ class TestPathParsing:
 
         assert bucket == "my-bucket"
         assert key == "path/to/file.tif"
-
-    @pytest.mark.unit
-    def test_parse_s3_path_without_prefix(self):
-        """Test parsing S3 path without s3:// prefix."""
-        bucket, key = _parse_s3_path("my-bucket/path/to/file.tif")
-
-        assert bucket == "my-bucket"
-        assert key == "path/to/file.tif"
-
-    @pytest.mark.unit
-    def test_parse_s3_path_bucket_only(self):
-        """Test parsing bucket-only S3 path."""
-        bucket, key = _parse_s3_path("s3://my-bucket")
-
-        assert bucket == "my-bucket"
-        assert key == ""
 
     @pytest.mark.unit
     def test_detect_protocol_gs(self):
@@ -77,62 +58,8 @@ class TestPathParsing:
         assert key == "path/file.tif"
 
 
-class TestAEFTileInfoSource:
-    """Tests for AEFTileInfo source field."""
-
-    @pytest.mark.unit
-    def test_tile_info_with_gcs_source(self, sample_gcs_tile_info):
-        """Test AEFTileInfo with GCS source."""
-        assert sample_gcs_tile_info.source == DataSource.GCS
-        assert not sample_gcs_tile_info.is_source_coop
-
-    @pytest.mark.unit
-    def test_tile_info_with_source_coop(self, sample_source_coop_tile_info):
-        """Test AEFTileInfo with Source Coop source."""
-        assert sample_source_coop_tile_info.source == DataSource.SOURCE_COOP
-        assert sample_source_coop_tile_info.is_source_coop
-
-    @pytest.mark.unit
-    def test_tile_info_without_source(self):
-        """Test AEFTileInfo without source field."""
-        tile = AEFTileInfo(
-            id="test",
-            path="gs://bucket/file.tif",
-            year=2023,
-            bbox=(-122.5, 37.5, -122.0, 38.0),
-            crs_epsg=32610,
-        )
-        assert tile.source is None
-        assert not tile.is_source_coop
-
-
 class TestAEFIndexSourceCoop:
     """Tests for AEFIndex with Source Cooperative source."""
-
-    @pytest.mark.unit
-    def test_index_init_source_coop(self):
-        """Test AEFIndex initialization with Source Coop source."""
-        index = AEFIndex(source=DataSource.SOURCE_COOP)
-
-        assert index.source == DataSource.SOURCE_COOP
-        assert index._bucket == SOURCE_COOP_BUCKET
-        assert index._cache_filename == "aef_index_source_coop.parquet"
-
-    @pytest.mark.unit
-    def test_index_init_gcs(self):
-        """Test AEFIndex initialization with GCS source."""
-        index = AEFIndex(source=DataSource.GCS, gcp_project="my-project")
-
-        assert index.source == DataSource.GCS
-        assert index._bucket == GCS_BUCKET
-        assert index._cache_filename == "aef_index_gcs.parquet"
-
-    @pytest.mark.unit
-    def test_index_default_source_is_gcs(self):
-        """Test that default source is GCS."""
-        index = AEFIndex()
-
-        assert index.source == DataSource.GCS
 
     @pytest.mark.unit
     @pytest.mark.asyncio

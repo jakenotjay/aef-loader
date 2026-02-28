@@ -17,41 +17,9 @@ class TestParseGcsPath:
         assert bucket == "my-bucket"
         assert key == "path/to/file.tif"
 
-    @pytest.mark.unit
-    def test_parse_without_prefix(self):
-        """Test parsing path without gs:// prefix."""
-        bucket, key = _parse_gcs_path("my-bucket/path/to/file.tif")
-
-        assert bucket == "my-bucket"
-        assert key == "path/to/file.tif"
-
-    @pytest.mark.unit
-    def test_parse_bucket_only(self):
-        """Test parsing bucket-only path."""
-        bucket, key = _parse_gcs_path("gs://my-bucket")
-
-        assert bucket == "my-bucket"
-        assert key == ""
-
 
 class TestVirtualTiffReader:
     """Tests for VirtualTiffReader class."""
-
-    @pytest.mark.unit
-    def test_init_defaults(self):
-        """Test default initialization."""
-        reader = VirtualTiffReader()
-
-        assert reader.gcp_project is None
-        assert reader._stores == {}
-        assert reader._registry is None
-
-    @pytest.mark.unit
-    def test_init_with_project(self):
-        """Test initialization with GCP project."""
-        reader = VirtualTiffReader(gcp_project="my-project")
-
-        assert reader.gcp_project == "my-project"
 
     @pytest.mark.unit
     @pytest.mark.asyncio

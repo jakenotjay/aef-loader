@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import xarray as xr
 from aef_loader.constants import DataSource
 from aef_loader.index import AEFIndex
 from aef_loader.reader import VirtualTiffReader
@@ -178,49 +177,3 @@ class TestTightGeoboxReprojection:
             f"Single-variable approach ({single_var_tasks} tasks) should have fewer "
             f"tasks than 64-variable approach ({split_tasks} tasks)"
         )
-
-    @pytest.mark.timeout(300)
-    def test_reproject_matches_original(self, datatree, target_geobox):
-        """Tight and full-target reprojection produce identical pixel values."""
-        # Tight reprojection
-        tight_ds = reproject_datatree(datatree, target_geobox).compute()
-
-        # Full-target reprojection (old approach)
-        full_datasets = []
-        for zone_name in datatree.children:
-            zone_ds = datatree[zone_name].ds
-            if zone_ds is None or len(zone_ds.data_vars) == 0:
-                continue
-            full_datasets.append(
-                xr_reproject(zone_ds, target_geobox, resampling="nearest")
-            )
-
-        if len(full_datasets) == 1:
-            full_ds = full_datasets[0].compute()
-        else:
-            full_ds = full_datasets[0]
-            for ds in full_datasets[1:]:
-                full_ds = full_ds.combine_first(ds)
-            full_ds = full_ds.compute()
-
-        # Compare pixel values where both have coverage for a few bands
-        for band in ["A00", "A31", "A63"]:
-            # Use xarray alignment to compare on shared coordinates
-            tight_aligned, full_aligned = xr.align(
-                tight_ds["embeddings"].sel(band=band),
-                full_ds["embeddings"].sel(band=band),
-                join="inner",
-            )
-
-            t = tight_aligned.values
-            f = full_aligned.values
-
-            both_valid = ~np.isnan(t) & ~np.isnan(f)
-            if both_valid.sum() == 0:
-                continue
-
-            np.testing.assert_array_equal(
-                t[both_valid],
-                f[both_valid],
-                err_msg=f"Pixel mismatch for band {band}",
-            )

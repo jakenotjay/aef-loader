@@ -17,8 +17,8 @@ from aef_loader.types import AEFTileInfo
 from aef_loader.utils import (
     clip_to_geometry,
     dequantize_aef,
-    get_channel_names,
     mask_nodata,
+    quantize_aef,
     reproject_datatree,
     split_bands,
 )
@@ -33,8 +33,8 @@ __all__ = [
     # Utility functions
     "clip_to_geometry",
     "dequantize_aef",
-    "get_channel_names",
     "mask_nodata",
+    "quantize_aef",
     "reproject_datatree",
     "split_bands",
 ]

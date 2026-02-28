@@ -39,8 +39,3 @@ class AEFTileInfo:
     def as_datetime(self) -> dt.datetime:
         """Get datetime (January 1st of the year)."""
         return dt.datetime(self.year, 1, 1)
-
-    @property
-    def is_source_coop(self) -> bool:
-        """Check if this tile is from Source Cooperative."""
-        return self.source == DataSource.SOURCE_COOP

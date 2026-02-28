@@ -18,7 +18,6 @@ from xarray import DataTree
 from aef_loader.constants import (
     AEF_DEQUANT_DIVISOR,
     AEF_NODATA_VALUE,
-    AEF_NUM_CHANNELS,
 )
 
 if TYPE_CHECKING:
@@ -143,23 +142,6 @@ def mask_nodata(
     if isinstance(data, xr.DataArray):
         return data.where(data != nodata_value)
     return np.where(data == nodata_value, np.nan, data.astype(np.float32))
-
-
-def get_channel_names(
-    num_channels: int = AEF_NUM_CHANNELS,
-    prefix: str = "A",
-) -> list[str]:
-    """
-    Get list of AEF channel names.
-
-    Args:
-        num_channels: Number of channels (default: 64)
-        prefix: Channel name prefix (default: "A")
-
-    Returns:
-        List of channel names like ["A00", "A01", ..., "A63"]
-    """
-    return [f"{prefix}{i:02d}" for i in range(num_channels)]
 
 
 def split_bands(ds: xr.Dataset, var: str = "embeddings") -> xr.Dataset:

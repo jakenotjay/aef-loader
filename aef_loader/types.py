@@ -44,16 +44,3 @@ class AEFTileInfo:
     def is_source_coop(self) -> bool:
         """Check if this tile is from Source Cooperative."""
         return self.source == DataSource.SOURCE_COOP
-
-
-@dataclass
-class TileRequest:
-    """Request for a specific tile within a COG."""
-
-    row: int
-    col: int
-    band: int | None = None  # For band-major COGs
-
-    # Byte location (if known from cached metadata)
-    offset: int | None = None
-    size: int | None = None

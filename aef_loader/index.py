@@ -8,12 +8,10 @@ Supports both Google Cloud Storage (GCS) and Source Cooperative (S3) backends.
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
 from pathlib import Path
 
 import geopandas as gpd
 import obstore as obs
-import pyarrow.dataset as ds
 from aef_loader.constants import (
     GCS_BUCKET,
     GCS_INDEX_BLOB,
@@ -296,75 +294,3 @@ class AEFIndex:
 
         return tiles
 
-    def filter_pyarrow(
-        self,
-        dataset: ds.Dataset,
-        bbox: BoundingBox | None = None,
-        years: DateRange | None = None,
-    ) -> ds.Dataset:
-        """
-        Apply PyArrow pushdown filters to a dataset.
-
-        This is more efficient than filtering a GeoDataFrame for large datasets.
-
-        Args:
-            dataset: PyArrow dataset to filter
-            bbox: Bounding box filter
-            years: Year range filter
-
-        Returns:
-            Filtered dataset
-        """
-        filter_expr = None
-
-        if bbox:
-            minx, miny, maxx, maxy = bbox
-            # Filter based on bbox column (list of 4 floats)
-            bbox_filter = (
-                (ds.field("bbox")[0] >= minx)
-                & (ds.field("bbox")[1] >= miny)
-                & (ds.field("bbox")[2] <= maxx)
-                & (ds.field("bbox")[3] <= maxy)
-            )
-            filter_expr = bbox_filter
-
-        if years:
-            start_year, end_year = years
-            if isinstance(start_year, str):
-                start_year = int(start_year[:4])
-            if isinstance(end_year, str):
-                end_year = int(end_year[:4])
-
-            year_filter = (ds.field("year") >= start_year) & (
-                ds.field("year") <= end_year
-            )
-            filter_expr = (
-                year_filter if filter_expr is None else filter_expr & year_filter
-            )
-
-        if filter_expr is not None:
-            return dataset.filter(filter_expr)
-
-        return dataset
-
-    async def iterate_tiles(
-        self,
-        bbox: BoundingBox | None = None,
-        years: DateRange | None = None,
-    ) -> AsyncIterator[AEFTileInfo]:
-        """
-        Async iterator over tiles matching the query.
-
-        Yields tiles one at a time.
-
-        Args:
-            bbox: Bounding box filter
-            years: Year range filter
-
-        Yields:
-            AEFTileInfo objects
-        """
-        tiles = await self.query(bbox=bbox, years=years)
-
-        for tile in tiles:
-            yield tile

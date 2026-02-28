@@ -15,7 +15,6 @@ from aef_loader.index import AEFIndex
 from aef_loader.reader import VirtualTiffReader
 from aef_loader.types import AEFTileInfo
 from aef_loader.utils import (
-    clip_to_geometry,
     dequantize_aef,
     mask_nodata,
     quantize_aef,
@@ -31,7 +30,6 @@ __all__ = [
     "AEFTileInfo",
     "DataSource",
     # Utility functions
-    "clip_to_geometry",
     "dequantize_aef",
     "mask_nodata",
     "quantize_aef",

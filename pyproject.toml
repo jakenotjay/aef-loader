@@ -19,9 +19,7 @@ dependencies = [
     "zarr>=3.0.0",
     "shapely>=2.0.2",
     "affine>=2.4.0",
-    "pyproj>=3.6.1",
     "odc-geo>=0.4.10",
-    "rasterio>=1.4.4",
 ]
 
 [dependency-groups]
@@ -31,6 +29,9 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff",
     "ty",
+]
+docs = [
+    "mkdocs-material",
 ]
 
 [build-system]

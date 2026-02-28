@@ -29,7 +29,7 @@ from aef_loader.constants import (
 from aef_loader.index import AEFIndex
 from aef_loader.reader import VirtualTiffReader
 from aef_loader.types import BoundingBox
-from aef_loader.utils import clip_to_geometry, reproject_datatree
+from aef_loader.utils import reproject_datatree
 from odc.geo.geobox import GeoBox
 from shapely.geometry import box, shape
 
@@ -158,24 +158,13 @@ async def main():
     print(f"Reprojected dimensions: {dict(reprojected.sizes)}")
     print(f"Reprojected CRS: {reprojected.odc.crs}")
 
-    # Clip to complex geometry
-    print("\n" + "=" * 50)
-    print("Clipping to complex geometry...")
-
-    print(f"Before clipping: {dict(reprojected.sizes)}")
-
-    # Clip to geometry - only loads chunks that intersect
-    clipped = clip_to_geometry(reprojected, CLIP_GEOMETRY)
-
-    print(f"After clipping: {dict(clipped.sizes)}")
-
     # Select single time step for demo
-    if "time" in clipped.dims:
-        clipped = clipped.isel(time=0, drop=True)
+    if "time" in reprojected.dims:
+        reprojected = reprojected.isel(time=0, drop=True)
 
     # Load the data (triggers actual reprojection and reads from remote COGs)
-    print("\nLoading clipped and reprojected data...")
-    result = clipped.compute()
+    print("\nLoading reprojected data...")
+    result = reprojected.compute()
 
     # Count valid pixels
     sample_var = list(result.data_vars)[0]

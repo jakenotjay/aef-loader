@@ -1,0 +1,47 @@
+site_name: aef-loader
+site_description: Efficient loader for Alpha Earth Foundations embeddings using virtual-tiff and dask
+site_author: Jake Wilkins
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "http://localhost:8000"]
+
+repo_url: https://github.com/jww/aef-loader
+repo_name: aef-loader
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Data Sources: data-sources.md
+  - API Reference: api.md
+  - Data Format: data-format.md

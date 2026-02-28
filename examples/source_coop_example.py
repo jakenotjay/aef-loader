@@ -126,9 +126,8 @@ async def run_source_coop_workflow(
     This demonstrates:
     1. Querying the Source Cooperative AEF index
     2. Opening tiles organized by UTM zone via virtual-tiff
-    3. Filtering to a complex geometry
-    4. Reprojecting to a common CRS
-    5. Dequantizing embeddings
+    3. Reprojecting to a common CRS
+    4. Dequantizing embeddings
     """
     import json
 
@@ -136,7 +135,6 @@ async def run_source_coop_workflow(
         AEFIndex,
         DataSource,
         VirtualTiffReader,
-        clip_to_geometry,
         dequantize_aef,
         reproject_datatree,
     )
@@ -215,29 +213,8 @@ async def run_source_coop_workflow(
             ds = tree[zone].ds
             logger.info(f"  Zone {zone}: {dict(ds.sizes)}")
 
-        # Step 3: Demonstrate geometry clipping (optional)
-        clip_geometry = {
-            "type": "Polygon",
-            "coordinates": [
-                [
-                    [-122.45, 37.75],
-                    [-122.35, 37.75],
-                    [-122.35, 37.85],
-                    [-122.45, 37.85],
-                    [-122.45, 37.75],
-                ]
-            ],
-        }
-        logger.info("\nStep 3: Clipping to geometry...")
-        for zone in list(tree.children.keys()):
-            ds = tree[zone].ds
-            clipped = clip_to_geometry(ds, clip_geometry)
-            logger.info(f"  Zone {zone} after clip: {dict(clipped.sizes)}")
-            # Update tree with clipped data
-            tree[zone].ds = clipped
-
-        # Step 4: Reproject to common CRS
-        logger.info("\nStep 4: Reprojecting to common CRS...")
+        # Step 3: Reproject to common CRS
+        logger.info("\nStep 3: Reprojecting to common CRS...")
         target_geobox = GeoBox.from_bbox(
             bbox=bbox,
             crs="EPSG:4326",
@@ -247,8 +224,8 @@ async def run_source_coop_workflow(
         logger.info(f"Combined dataset: {dict(combined.sizes)}")
         logger.info(f"CRS: {combined.odc.crs}")
 
-        # Step 5: Dequantize embeddings
-        logger.info("\nStep 5: Dequantizing first band (A00)...")
+        # Step 4: Dequantize embeddings
+        logger.info("\nStep 4: Dequantizing first band (A00)...")
         a00 = combined["A00"]
         a00_dequant = dequantize_aef(a00)
         logger.info(f"  Original dtype: {a00.dtype}")

@@ -162,7 +162,7 @@ class VirtualTiffReader:
 
     Example:
         >>> from aef_loader import AEFIndex, VirtualTiffReader, DataSource
-        >>> from aef_loader.utils import reproject_datatree, clip_to_geometry
+        >>> from aef_loader.utils import reproject_datatree
         >>> from odc.geo.geobox import GeoBox
         >>>
         >>> # Query tiles
@@ -178,10 +178,7 @@ class VirtualTiffReader:
         >>> # Reproject to common CRS if needed
         >>> target = GeoBox.from_bbox(bbox=(-122.5, 37.5, -121.5, 38.5), crs="EPSG:4326", resolution=0.0001)
         >>> combined = reproject_datatree(tree, target)
-        >>>
-        >>> # Clip to geometry and compute
-        >>> clipped = clip_to_geometry(combined, my_geometry)
-        >>> result = clipped.compute()
+        >>> result = combined.compute()
     """
 
     def __init__(

@@ -9,10 +9,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import xarray as xr
 from odc.geo.xr import xr_reproject
-from pyproj import Transformer
-from rasterio.features import geometry_mask
-from shapely.geometry import shape
-from shapely.ops import transform
 from xarray import DataTree
 
 from aef_loader.constants import (
@@ -22,7 +18,6 @@ from aef_loader.constants import (
 
 if TYPE_CHECKING:
     from odc.geo.geobox import GeoBox
-    from shapely.geometry.base import BaseGeometry
 
 
 def dequantize_aef(
@@ -163,73 +158,6 @@ def split_bands(ds: xr.Dataset, var: str = "embeddings") -> xr.Dataset:
     split = da.to_dataset(dim="band")
     split.attrs = ds.attrs.copy()
     return split
-
-
-def clip_to_geometry(
-    ds: xr.Dataset,
-    geometry: BaseGeometry | dict,
-    geometry_crs: str = "EPSG:4326",
-) -> xr.Dataset:
-    """
-    Clip dataset to a complex geometry, loading only necessary chunks.
-
-    This function efficiently clips a dataset to an arbitrary polygon by:
-    1. First clipping to the geometry's bounding box (reduces chunks loaded)
-    2. Then applying a rasterized geometry mask for exact clipping
-
-    The result is a lazy dataset - chunks are only loaded when .compute() is called,
-    and only chunks that intersect the geometry bbox will be read.
-
-    Args:
-        ds: Dataset with odc.geobox (must have CRS and spatial coordinates).
-            Typically obtained from VirtualTiffReader.open_tiles_by_zone().
-        geometry: Shapely geometry or GeoJSON-like dict defining the clip region
-        geometry_crs: CRS of the input geometry (default: "EPSG:4326" / WGS84)
-
-    Returns:
-        Dataset clipped to the geometry, with pixels outside set to NaN.
-        The spatial extent is reduced to the geometry's bounding box.
-
-    Example:
-        >>> from shapely.geometry import Polygon
-        >>> geometry = Polygon([(-122.4, 37.7), (-122.3, 37.8), (-122.2, 37.7), (-122.4, 37.7)])
-        >>> clipped = clip_to_geometry(zone_ds, geometry)
-        >>> result = clipped.compute()  # Only loads chunks intersecting geometry
-    """
-    # Convert GeoJSON dict to shapely geometry if needed
-    if isinstance(geometry, dict):
-        geometry = shape(geometry)
-
-    # Get dataset CRS from odc accessor
-    ds_crs = str(ds.odc.crs)
-
-    # Transform geometry to dataset CRS if needed
-    if geometry_crs != ds_crs:
-        proj_transformer = Transformer.from_crs(geometry_crs, ds_crs, always_xy=True)
-        geometry = transform(proj_transformer.transform, geometry)
-
-    # Clip to geometry bounding box first (reduces chunks loaded)
-    minx, miny, maxx, maxy = geometry.bounds
-
-    # Handle both y-increasing (bottom-up) and y-decreasing (top-down) datasets
-    y_coords = ds.coords["y"].values
-    if y_coords[0] < y_coords[-1]:  # y is increasing (bottom-up)
-        ds = ds.sel(x=slice(minx, maxx), y=slice(miny, maxy))
-    else:  # y is decreasing (top-down)
-        ds = ds.sel(x=slice(minx, maxx), y=slice(maxy, miny))
-
-    # Create rasterized geometry mask
-    geobox = ds.odc.geobox
-    mask = geometry_mask(
-        [geometry],
-        out_shape=(geobox.shape.y, geobox.shape.x),
-        transform=geobox.affine,
-        invert=True,  # True inside geometry, False outside
-    )
-
-    # Apply mask - pixels outside geometry become NaN
-    # This is lazy - actual data loading happens on .compute()
-    return ds.where(mask)
 
 
 def reproject_datatree(

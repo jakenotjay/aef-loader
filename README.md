@@ -4,16 +4,18 @@ Virtualizarr access for AEF embeddings as an analysis ready data cube. 5x quicke
 
 ## TODOs before v0.1.0
 - [x] Cleanup from monorepo
-- [ ] Cleanup unused code, quality pass for AI gen nonsense
-- [ ] Ensure tests are relevant
-- [ ] CI/CD (mostly follow https://github.com/carderne/postmodern-python)
-- [ ] precommit for CI/CD
+- [x] Cleanup unused code, quality pass for AI gen nonsense
+- [x] Ensure tests are relevant
+- [x] CI/CD (mostly follow https://github.com/carderne/postmodern-python)
+- [x] precommit for CI/CD
 - [ ] Fix examples up, add notebooks (do people still use these?)
 - [ ] Proper documentation, friendly readme
-- [ ] read the docs
+- [x] read the docs
 - [ ] benchmarks: rasterio/rioxarray, XEE with HVE (20 vs 500 connections)
 - [ ] reprojection best practices i.e. when do you need to dequantise before projection?
-- [ ] blog post (why? virtual what now? learnings about odc-geo reprojection and GIL contention, reprojection nonsense, dtype nonsense, dask nonsense, requester pays nonsense, thanks to vtif and obstore folks)
+- [ ] blog post (why? virtual what now? learnings about odc-geo reprojection and GIL contention, reprojection nonsense, dtype nonsense, dask nonsense, requester pays nonsense, thanks to vtif and obstore folks, why geobox, what i like about it)
+- [ ] also include the origin of why, high volume endpoint and Xee is very slow for pulling covariates because it A) generates the coordinates via API request rather than linear algebra B) auto chunks such such that images are pulled 1 band, 256 x 256 chunks + costs money
+- [ ] cleanup dependencies (we don't need dask here)
 
 ## Overview
 
@@ -59,7 +61,7 @@ The package supports two data sources:
 ```python
 import asyncio
 from aef_loader import AEFIndex, VirtualTiffReader, DataSource
-from aef_loader.utils import reproject_datatree, clip_to_geometry
+from aef_loader.utils import reproject_datatree
 from odc.geo.geobox import GeoBox
 
 async def main():
@@ -146,10 +148,8 @@ async with VirtualTiffReader() as reader:
 ```python
 from aef_loader import (
     dequantize_aef,
-    get_channel_names,
-    select_channels,
+    quantize_aef,
     mask_nodata,
-    clip_to_geometry,
     reproject_datatree,
 )
 
@@ -160,15 +160,9 @@ masked = mask_nodata(data)
 # Formula: ((value / 127.5) ** 2) * sign(value)
 dequantized = dequantize_aef(data)
 
-# Get channel names: ["A00", "A01", ..., "A63"]
-names = get_channel_names()
-
-# Select specific channels
-subset = select_channels(data, [0, 1, 32, 63])
-subset = select_channels(data, ["A00", "A01", "A32", "A63"])
-
-# Clip dataset to geometry (filters chunks efficiently)
-clipped = clip_to_geometry(ds, geojson_geometry)
+# Quantize float32 embeddings back to int8 for storage
+# e.g. after dequantize -> reproject(bilinear) -> quantize
+requantized = quantize_aef(dequantized)
 
 # Reproject all zones in DataTree to common CRS
 from odc.geo.geobox import GeoBox

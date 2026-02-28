@@ -8,17 +8,18 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
-from aef_loader.constants import (
-    AEF_DEQUANT_DIVISOR,
-    AEF_NODATA_VALUE,
-    AEF_NUM_CHANNELS,
-)
 from odc.geo.xr import xr_reproject
 from pyproj import Transformer
 from rasterio.features import geometry_mask
 from shapely.geometry import shape
 from shapely.ops import transform
 from xarray import DataTree
+
+from aef_loader.constants import (
+    AEF_DEQUANT_DIVISOR,
+    AEF_NODATA_VALUE,
+    AEF_NUM_CHANNELS,
+)
 
 if TYPE_CHECKING:
     from odc.geo.geobox import GeoBox
@@ -83,6 +84,44 @@ def dequantize_aef(
     return dequantized
 
 
+def quantize_aef(
+    data: np.ndarray | xr.DataArray,
+    divisor: float = AEF_DEQUANT_DIVISOR,
+) -> np.ndarray | xr.DataArray:
+    """
+    Quantize float32 embeddings to int8 for storage.
+
+    This is the inverse of dequantize_aef().
+    Dequantization: ((v / 127.5) ** 2) * sign(v)
+    Quantization (inverse): sign(v) * sqrt(|v|) * 127.5
+
+    Args:
+        data: Float32 embedding data in range [-1, 1]
+        divisor: Quantization divisor (default: 127.5)
+
+    Returns:
+        Quantized int8 data in range [-127, 127]
+    """
+    sign = np.sign(data)
+    magnitude = np.sqrt(np.abs(data))
+    quantized = np.round(sign * magnitude * divisor)
+
+    # Clamp to valid range [-127, 127] BEFORE casting to int8
+    # This prevents overflow (128 -> -128 in int8)
+    quantized = np.clip(quantized, -127, 127).astype(np.int8)
+
+    if isinstance(data, xr.DataArray):
+        result = xr.DataArray(
+            quantized,
+            dims=data.dims,
+            coords=data.coords,
+            attrs=data.attrs.copy(),
+        )
+        result.attrs["quantized"] = True
+        return result
+
+    return quantized
+
 
 def mask_nodata(
     data: np.ndarray | xr.DataArray,
@@ -142,7 +181,6 @@ def split_bands(ds: xr.Dataset, var: str = "embeddings") -> xr.Dataset:
     split = da.to_dataset(dim="band")
     split.attrs = ds.attrs.copy()
     return split
-
 
 
 def clip_to_geometry(

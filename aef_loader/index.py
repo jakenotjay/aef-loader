@@ -293,4 +293,3 @@ class AEFIndex:
             tiles.append(tile)
 
         return tiles
-

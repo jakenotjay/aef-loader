@@ -59,3 +59,4 @@ include = ["tests/**"]
 [tool.ty.overrides.rules]
 possibly-missing-attribute = "ignore"
 no-matching-overload = "ignore"
+unresolved-attribute = "ignore"

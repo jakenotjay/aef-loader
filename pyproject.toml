@@ -48,3 +48,13 @@ markers = [
     "integration: Integration tests that may require external services",
     "requires_gcp: Tests that require authenticated GCP credentials",
 ]
+
+[tool.ty.src]
+exclude = ["examples/"]
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+possibly-missing-attribute = "ignore"
+no-matching-overload = "ignore"

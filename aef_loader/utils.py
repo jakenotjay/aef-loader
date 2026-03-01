@@ -44,10 +44,12 @@ def dequantize_aef(
         Dequantized float32 data in range [-1, 1], with NaN for nodata
 
     Example:
-        >>> import numpy as np
-        >>> quantized = np.array([127, -127, 0, -128], dtype=np.int8)
-        >>> dequantized = dequantize_aef(quantized)
-        >>> print(dequantized)  # [~1.0, ~-1.0, 0.0, nan]
+        ```python
+        import numpy as np
+        quantized = np.array([127, -127, 0, -128], dtype=np.int8)
+        dequantized = dequantize_aef(quantized)
+        print(dequantized)  # [~1.0, ~-1.0, 0.0, nan]
+        ```
     """
     if isinstance(data, xr.Dataset):
         return data.map(lambda x: dequantize_aef(x, divisor, nodata_value))
@@ -196,18 +198,20 @@ def reproject_datatree(
         Data variables remain as dask arrays until .compute() is called.
 
     Example:
-        >>> from odc.geo.geobox import GeoBox
-        >>>
-        >>> # Create target geobox (e.g., 100m resolution in EPSG:4326)
-        >>> target = GeoBox.from_bbox(
-        ...     bbox=(-122.5, 37.5, -121.5, 38.5),
-        ...     crs="EPSG:4326",
-        ...     resolution=0.001,  # ~100m at this latitude
-        ... )
-        >>>
-        >>> # Reproject all zones to target
-        >>> combined = reproject_datatree(tree, target)
-        >>> result = combined.compute()  # triggers actual reprojection
+        ```python
+        from odc.geo.geobox import GeoBox
+
+        # Create target geobox (e.g., 100m resolution in EPSG:4326)
+        target = GeoBox.from_bbox(
+            bbox=(-122.5, 37.5, -121.5, 38.5),
+            crs="EPSG:4326",
+            resolution=0.001,  # ~100m at this latitude
+        )
+
+        # Reproject all zones to target
+        combined = reproject_datatree(tree, target)
+        result = combined.compute()  # triggers actual reprojection
+        ```
     """
     reprojected_datasets = []
 

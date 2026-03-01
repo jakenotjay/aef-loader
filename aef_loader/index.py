@@ -12,6 +12,9 @@ from pathlib import Path
 
 import geopandas as gpd
 import obstore as obs
+from obstore.store import GCSStore, S3Store
+from shapely.geometry import box
+
 from aef_loader.constants import (
     GCS_BUCKET,
     GCS_INDEX_BLOB,
@@ -26,8 +29,6 @@ from aef_loader.types import (
     BoundingBox,
     DateRange,
 )
-from obstore.store import GCSStore, S3Store
-from shapely.geometry import box
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +43,21 @@ class AEFIndex:
     Supports both GCS (Google Cloud Storage) and Source Cooperative (AWS S3) backends.
 
     Example:
-        >>> # GCS (requires GCP project for requester-pays)
-        >>> index = AEFIndex(source=DataSource.GCS, gcp_project="my-project")
-        >>> await index.download()
-        >>> tiles = await index.query(bbox=(-122.5, 37.5, -122.0, 38.0), years=(2020, 2023))
+        GCS (requires GCP project for requester-pays):
 
-        >>> # Source Cooperative (public, no auth required)
-        >>> index = AEFIndex(source=DataSource.SOURCE_COOP)
-        >>> await index.download()
-        >>> tiles = await index.query(bbox=(-122.5, 37.5, -122.0, 38.0), years=(2020, 2023))
+        ```python
+        index = AEFIndex(source=DataSource.GCS, gcp_project="my-project")
+        await index.download()
+        tiles = await index.query(bbox=(-122.5, 37.5, -122.0, 38.0), years=(2020, 2023))
+        ```
+
+        Source Cooperative (public, no auth required):
+
+        ```python
+        index = AEFIndex(source=DataSource.SOURCE_COOP)
+        await index.download()
+        tiles = await index.query(bbox=(-122.5, 37.5, -122.0, 38.0), years=(2020, 2023))
+        ```
     """
 
     def __init__(

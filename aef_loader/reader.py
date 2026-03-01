@@ -161,24 +161,26 @@ class VirtualTiffReader:
     `reproject_datatree()` from the utils module.
 
     Example:
-        >>> from aef_loader import AEFIndex, VirtualTiffReader, DataSource
-        >>> from aef_loader.utils import reproject_datatree
-        >>> from odc.geo.geobox import GeoBox
-        >>>
-        >>> # Query tiles
-        >>> index = AEFIndex(source=DataSource.SOURCE_COOP)
-        >>> await index.download()
-        >>> index.load()
-        >>> tiles = await index.query(bbox=(-122.5, 37.5, -121.5, 38.5), years=(2020, 2022))
-        >>>
-        >>> # Load by UTM zone
-        >>> async with VirtualTiffReader() as reader:
-        ...     tree = await reader.open_tiles_by_zone(tiles)
-        >>>
-        >>> # Reproject to common CRS if needed
-        >>> target = GeoBox.from_bbox(bbox=(-122.5, 37.5, -121.5, 38.5), crs="EPSG:4326", resolution=0.0001)
-        >>> combined = reproject_datatree(tree, target)
-        >>> result = combined.compute()
+        ```python
+        from aef_loader import AEFIndex, VirtualTiffReader, DataSource
+        from aef_loader.utils import reproject_datatree
+        from odc.geo.geobox import GeoBox
+
+        # Query tiles
+        index = AEFIndex(source=DataSource.SOURCE_COOP)
+        await index.download()
+        index.load()
+        tiles = await index.query(bbox=(-122.5, 37.5, -121.5, 38.5), years=(2020, 2022))
+
+        # Load by UTM zone
+        async with VirtualTiffReader() as reader:
+            tree = await reader.open_tiles_by_zone(tiles)
+
+        # Reproject to common CRS if needed
+        target = GeoBox.from_bbox(bbox=(-122.5, 37.5, -121.5, 38.5), crs="EPSG:4326", resolution=0.0001)
+        combined = reproject_datatree(tree, target)
+        result = combined.compute()
+        ```
     """
 
     def __init__(
@@ -273,12 +275,14 @@ class VirtualTiffReader:
                 ...
 
         Example:
-            >>> tiles = await index.query(bbox=bbox, years=(2020, 2022))
-            >>> async with VirtualTiffReader() as reader:
-            ...     tree = await reader.open_tiles_by_zone(tiles)
-            >>> for zone in tree.children:
-            ...     ds = tree[zone].ds
-            ...     print(f"{zone}: {ds.odc.crs}, {dict(ds.sizes)}")
+            ```python
+            tiles = await index.query(bbox=bbox, years=(2020, 2022))
+            async with VirtualTiffReader() as reader:
+                tree = await reader.open_tiles_by_zone(tiles)
+            for zone in tree.children:
+                ds = tree[zone].ds
+                print(f"{zone}: {ds.odc.crs}, {dict(ds.sizes)}")
+            ```
         """
         if not tiles:
             raise ValueError("No tiles provided")

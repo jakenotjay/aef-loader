@@ -77,29 +77,6 @@ class TestAEFIndexSourceCoop:
         assert result == cache_file
 
     @pytest.mark.unit
-    def test_convert_path_to_source_coop(self):
-        """Test path conversion for Source Coop."""
-        index = AEFIndex(source=DataSource.SOURCE_COOP)
-
-        gcs_path = "gs://alphaearth_foundations/satellite_embedding/v1/annual/2023/10N/tile.tiff"
-        expected = "s3://us-west-2.opendata.source.coop/tge-labs/aef/v1/annual/2023/10N/tile.tiff"
-
-        result = index._convert_path_to_source(gcs_path)
-
-        assert result == expected
-
-    @pytest.mark.unit
-    def test_convert_path_to_gcs(self):
-        """Test path conversion keeps GCS path unchanged."""
-        index = AEFIndex(source=DataSource.GCS, gcp_project="my-project")
-
-        gcs_path = "gs://alphaearth_foundations/satellite_embedding/v1/annual/2023/10N/tile.tiff"
-
-        result = index._convert_path_to_source(gcs_path)
-
-        assert result == gcs_path
-
-    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_query_populates_source(self, tmp_path, mock_source_coop_gdf):
         """Test that query populates source field on tiles."""

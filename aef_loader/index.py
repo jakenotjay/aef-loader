@@ -20,7 +20,6 @@ from aef_loader.constants import (
     GCS_INDEX_BLOB,
     SOURCE_COOP_BUCKET,
     SOURCE_COOP_INDEX_BLOB,
-    SOURCE_COOP_PREFIX,
     SOURCE_COOP_REGION,
     DataSource,
 )
@@ -186,33 +185,6 @@ class AEFIndex:
         logger.info(f"Loaded {len(self._gdf)} tiles from AEF index")
         return self._gdf
 
-    def _convert_path_to_source(self, path: str) -> str:
-        """
-        Convert a path from index to the appropriate cloud path for the data source.
-
-        The index stores GCS paths (gs://...), but Source Coop uses S3 paths.
-        GCS: gs://alphaearth_foundations/satellite_embedding/v1/annual/YYYY/zone/file.tiff
-        S3:  s3://us-west-2.opendata.source.coop/tge-labs/aef/v1/annual/YYYY/zone/file.tiff
-        """
-        if self.source == DataSource.SOURCE_COOP:
-            # Convert GCS path to S3 path for Source Coop
-            if path.startswith("gs://alphaearth_foundations/satellite_embedding/"):
-                suffix = path.replace(
-                    "gs://alphaearth_foundations/satellite_embedding/", ""
-                )
-                return f"s3://{SOURCE_COOP_BUCKET}/{SOURCE_COOP_PREFIX}/{suffix}"
-            elif path.startswith("gs://"):
-                # Handle other GCS paths - try to extract the relative portion
-                parts = path.split("/")
-                # Find 'v1/annual' in the path and extract from there
-                for i, part in enumerate(parts):
-                    if part == "v1" and i + 1 < len(parts) and parts[i + 1] == "annual":
-                        suffix = "/".join(parts[i:])
-                        return (
-                            f"s3://{SOURCE_COOP_BUCKET}/{SOURCE_COOP_PREFIX}/{suffix}"
-                        )
-        return path
-
     def _get_start_and_end_year(self, years: int | DateRange) -> tuple[int, int]:
         if isinstance(years, int):
             start_year = end_year = years
@@ -272,8 +244,7 @@ class AEFIndex:
 
         tiles = []
         for _, row in gdf.iterrows():
-            # Convert path to the appropriate cloud path for this source
-            path = self._convert_path_to_source(row["path"])
+            path = row["path"]
 
             tile = AEFTileInfo(
                 id=str(row.get("fid", row.name)),

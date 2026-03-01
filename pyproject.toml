@@ -18,6 +18,7 @@ dependencies = [
     "shapely>=2.0.2",
     "affine>=2.4.0",
     "odc-geo>=0.4.10",
+    "pyarrow>=23.0.1",
 ]
 
 [dependency-groups]

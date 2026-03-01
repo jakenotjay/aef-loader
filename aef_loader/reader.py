@@ -19,13 +19,14 @@ from typing import TYPE_CHECKING, Literal
 
 import xarray as xr
 from affine import Affine
-from aef_loader.constants import SOURCE_COOP_REGION
 from obstore.store import GCSStore, S3Store
 from odc.geo.geobox import GeoBox
 from odc.geo.xr import assign_crs, xr_coords
 from virtual_tiff import VirtualTIFF
 from virtualizarr.registry import ObjectStoreRegistry
 from xarray import DataTree
+
+from aef_loader.constants import SOURCE_COOP_REGION
 
 if TYPE_CHECKING:
     from aef_loader.types import AEFTileInfo
@@ -347,7 +348,7 @@ class VirtualTiffReader:
             manifest_store = await asyncio.to_thread(
                 parser, url=file_url, registry=registry
             )
-            ds = await asyncio.to_thread(
+            ds: xr.Dataset = await asyncio.to_thread(
                 xr.open_zarr, manifest_store, zarr_format=3, consolidated=False
             )
 

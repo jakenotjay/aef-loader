@@ -11,7 +11,7 @@ AEF is stored by two hosts:
 - Google Cloud Storage (official support) - requester pays (requires gcp_project)
 - Source Cooperative - AWS hosted and free to access
 
-More in the docs.
+More in the [docs](https://aef-loader.readthedocs.io/en/latest/).
 
 ## What does aef-loader do?
 

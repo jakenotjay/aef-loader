@@ -13,5 +13,5 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
-      - run: uv sync --group dev
+      - run: uv sync --all-groups
       - run: uv run ty check

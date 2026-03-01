@@ -3,7 +3,7 @@ site_description: Efficient loader for Alpha Earth Foundations embeddings using 
 site_author: Jake Wilkins
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, "http://localhost:8000"]
 
-repo_url: https://github.com/jww/aef-loader
+repo_url: https://github.com/jakenotjay/aef-loader
 repo_name: aef-loader
 
 theme:
@@ -27,6 +27,18 @@ theme:
     - navigation.expand
     - search.highlight
 
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_signature_annotations: true
+            members_order: source
+            merge_init_into_class: true
+
 markdown_extensions:
   - admonition
   - pymdownx.details
@@ -41,7 +53,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
   - Data Sources: data-sources.md
-  - API Reference: api.md
-  - Data Format: data-format.md
+  - API Reference: api_reference.md
+  - API (Examples): api_examples.md
+  - Benchmarks: benchmarks.md

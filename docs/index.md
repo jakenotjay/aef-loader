@@ -7,6 +7,7 @@ Virtualizarr access for AEF embeddings as an analysis ready data cube, alongside
 Alpha Earth Foundations embeddings is a dataset produced by Google Deepmind, providing a yearly 64-channel embeddings derived from numerous satellite image sources with numerous downstream applications. The embeddings are stored as multi-band Cloud-Optimised GeoTIFFs (COGs), alongside a parquet index file.
 
 AEF is stored by two hosts:
+
 - Google Cloud Storage (official support) - requester pays (requires gcp_project)
 - Source Cooperative - AWS hosted and free to access
 
@@ -15,10 +16,12 @@ More in the docs.
 ## What does aef-loader do?
 
 aef-loader provides two key functionalities:
+
 1. Rapid download, and querying of indexes for source_coop + gcs with obstore and geopandas
 2. Lazily load the COGs as VirtualiZarr as a datatree by UTM zone, COG headers are cached, so repeated reads are cheap(er)
 
 As additional utilities:
+
 - dequantize, and requantize the embeddings
 - split the "embeddings" dataset into 64 datasets
 - use odc-geobox for dask aware reprojections for creating multi-zone composites
@@ -28,6 +31,7 @@ As additional utilities:
 Alpha Earth Foundations embeddings is a dataset produced by Google Deepmind, providing a yearly 64-channel embeddings derived from numerous satellite image sources with numerous downstream applications. The embeddings are stored as multi-band Cloud-Optimised GeoTIFFs (COGs).
 
 aef-loader supports two dataset hosts, both having tradeoffs:
+
 1. [Google Cloud Storage](https://developers.google.com/earth-engine/guides/aef_on_gcs_readme) - maintained by the [Earth Engine](https://earthengine.google.com/) team, more up to date but requiring authentication and "[requester pays](https://docs.cloud.google.com/storage/docs/requester-pays)", meaning users must pay egress and other charges.
 2. [Source Cooperative](https://source.coop/tge-labs/aef) - Hosted on AWS S3 and free to access, but generally less up to date (currently missing 2017 and 2025)
 

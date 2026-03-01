@@ -65,8 +65,8 @@ def test_rioxarray(benchmark, single_tile_url, tmp_path):
             shutil.rmtree(zarr_path)
 
     def _load():
-        da = rioxarray.open_rasterio(single_tile_url, chunks="auto")
-        da.to_dataset(name="embeddings").to_zarr(zarr_path)
+        da = rioxarray.open_rasterio(single_tile_url, chunks="auto")  # type: ignore[arg-type]
+        da.to_dataset(name="embeddings").to_zarr(zarr_path)  # type: ignore[union-attr]
         return da
 
     result = benchmark.pedantic(

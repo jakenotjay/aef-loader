@@ -42,7 +42,7 @@ def cache_dir(tmp_path_factory):
 def source_coop_index(cache_dir) -> AEFIndex:
     """Ready-to-use AEFIndex backed by Source Cooperative (public S3)."""
     index = AEFIndex(source=DataSource.SOURCE_COOP, cache_dir=cache_dir)
-    asyncio.get_event_loop().run_until_complete(index.download())
+    asyncio.run(index.download())
     index.load()
     return index
 
@@ -50,7 +50,7 @@ def source_coop_index(cache_dir) -> AEFIndex:
 @pytest.fixture(scope="session")
 def single_tile(source_coop_index):
     """A single tile for single-tile benchmarks."""
-    tiles = asyncio.get_event_loop().run_until_complete(
+    tiles = asyncio.run(
         source_coop_index.query(
             bbox=BENCH_BBOX, years=BENCH_YEAR, limit=SINGLE_TILE_LIMIT
         )
@@ -63,7 +63,7 @@ def single_tile(source_coop_index):
 @pytest.fixture(scope="session")
 def composite_tiles(source_coop_index):
     """Multiple tiles for composite benchmarks."""
-    tiles = asyncio.get_event_loop().run_until_complete(
+    tiles = asyncio.run(
         source_coop_index.query(
             bbox=BENCH_BBOX, years=BENCH_YEAR, limit=COMPOSITE_TILE_LIMIT
         )

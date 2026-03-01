@@ -1,7 +1,7 @@
 [project]
 name = "aef-loader"
 version = "0.1.0"
-description = "Efficient loader for Alpha Earth Foundations embeddings using virtual-tiff and obstore"
+description = "Virtualizarr access for AEF embeddings."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [

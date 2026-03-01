@@ -253,6 +253,7 @@ class VirtualTiffReader:
         self,
         tiles: list[AEFTileInfo],
         ifd: int = 0,
+        chunks: int | dict | Literal["auto"] | None = "auto",
     ) -> DataTree:
         """
         Open tiles and organize them by UTM zone in a DataTree.
@@ -267,6 +268,8 @@ class VirtualTiffReader:
         Args:
             tiles: List of AEFTileInfo objects from AEFIndex.query()
             ifd: Image File Directory index (0 for full resolution)
+            chunks: The chunks parameter to pass to open_zarr, defaults to auto,
+                useful to pass None to stop dask task explosions
 
         Returns:
             DataTree with structure:
@@ -331,6 +334,7 @@ class VirtualTiffReader:
         self,
         tiles: list[AEFTileInfo],
         ifd: int = 0,
+        chunks: int | dict | Literal["auto"] | None = "auto",
     ) -> xr.Dataset:
         """
         Combine tiles within a single UTM zone.
@@ -349,7 +353,11 @@ class VirtualTiffReader:
                 parser, url=file_url, registry=registry
             )
             ds: xr.Dataset = await asyncio.to_thread(
-                xr.open_zarr, manifest_store, zarr_format=3, consolidated=False
+                xr.open_zarr,
+                manifest_store,
+                zarr_format=3,
+                consolidated=False,
+                chunks=chunks,
             )
 
             # Extract GeoBox from the model_transformation in the TIFF

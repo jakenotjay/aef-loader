@@ -6,7 +6,7 @@
 
 | Benchmark | aef-loader | rioxarray | Xee | rasteret (0.3.0) |
 |---|---|---|---|---|
-| Single tile load + write to zarr | | | TBD | TBD |
+| Single tile load + write to zarr | 115.9s | 249.2s | TBD | TBD |
 | Multi-tile reproject + composite | | | TBD | TBD |
 
 ### Multi-temporal

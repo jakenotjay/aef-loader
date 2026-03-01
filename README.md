@@ -36,6 +36,18 @@ aef-loader supports two dataset hosts, both having tradeoffs:
 2. [Source Cooperative](https://source.coop/tge-labs/aef) - Hosted on AWS S3 and free to access, but generally less up to date (currently missing 2017 and 2025)
 
 
+## Installation
+
+```bash
+pip install aef-loader
+```
+
+or:
+
+```bash
+uv add aef-loader
+```
+
 ## Quick Start
 
 ```python

@@ -1,7 +1,7 @@
 [project]
 name = "aef-loader"
 version = "0.1.0"
-description = "Efficient loader for Alpha Earth Foundations embeddings using virtual-tiff and dask"
+description = "Efficient loader for Alpha Earth Foundations embeddings using virtual-tiff and obstore"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -12,10 +12,8 @@ dependencies = [
     "virtualizarr>=2.0.0",
     "obstore>=0.4.0",
     "numpy>=1.24.0",
-    "pyarrow>=14.0.1",
     "geopandas>=0.14.0",
     "xarray>=2024.1.0",
-    "dask[array]>=2024.1.0",
     "zarr>=3.0.0",
     "shapely>=2.0.2",
     "affine>=2.4.0",

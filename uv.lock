@@ -19,12 +19,10 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "affine" },
-    { name = "dask", extra = ["array"] },
     { name = "geopandas" },
     { name = "numpy" },
     { name = "obstore" },
     { name = "odc-geo" },
-    { name = "pyarrow" },
     { name = "shapely" },
     { name = "virtual-tiff" },
     { name = "virtualizarr" },
@@ -54,12 +52,10 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "affine", specifier = ">=2.4.0" },
-    { name = "dask", extras = ["array"], specifier = ">=2024.1.0" },
     { name = "geopandas", specifier = ">=0.14.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "obstore", specifier = ">=0.4.0" },
     { name = "odc-geo", specifier = ">=0.4.10" },
-    { name = "pyarrow", specifier = ">=14.0.1" },
     { name = "shapely", specifier = ">=2.0.2" },
     { name = "virtual-tiff", specifier = ">=0.3.1" },
     { name = "virtualizarr", specifier = ">=2.0.0" },
@@ -490,9 +486,6 @@ wheels = [
 ]
 
 [package.optional-dependencies]
-array = [
-    { name = "numpy" },
-]
 complete = [
     { name = "bokeh" },
     { name = "distributed" },

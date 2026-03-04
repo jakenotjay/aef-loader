@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -39,6 +39,7 @@ benchmark = [
     { name = "xee" },
 ]
 dev = [
+    { name = "dask" },
     { name = "prek" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -73,6 +74,7 @@ benchmark = [
     { name = "xee", specifier = ">=0.0.24" },
 ]
 dev = [
+    { name = "dask", specifier = ">=2026.1.2" },
     { name = "prek", specifier = ">=0.3.4" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },

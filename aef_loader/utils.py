@@ -235,15 +235,26 @@ def reproject_datatree(
     if len(reprojected_datasets) == 1:
         return reprojected_datasets[0]
 
-    # Combine datasets using combine_first. Each reprojected dataset has NaN
-    # where its source zone had no coverage. combine_first fills NaN values
-    # from the first dataset with valid values from subsequent datasets.
-    # In true overlapping regions where both have valid data, the first
-    # dataset's values are used - but since they're reprojections of the
-    # same underlying data, values should be identical.
+    # Merge at dask.array level to preserve chunk structure.
+    # combine_first triggers xr.align(join="outer") which reindexes the band
+    # dimension, fragmenting band chunks. Since all datasets share the same
+    # target GeoBox, they have identical shapes and coordinates, so we can
+    # merge directly with da.where (a blockwise op that preserves chunks).
+    import dask.array as da
+
     combined = reprojected_datasets[0]
     for ds in reprojected_datasets[1:]:
-        combined = combined.combine_first(ds)
+        for var in combined.data_vars:
+            if var not in ds.data_vars:
+                continue
+            assert combined[var].shape == ds[var].shape, (
+                f"Shape mismatch merging zones: {combined[var].shape} vs {ds[var].shape}"
+            )
+            combined_arr = combined[var].data
+            other_arr = ds[var].data
+            # fillna semantics: where combined is NaN, use other
+            mask = da.isnan(combined_arr)
+            combined[var].data = da.where(mask, other_arr, combined_arr)
 
     combined.attrs["source_zones"] = [
         tree[z].ds.attrs.get("utm_zone", z) for z in tree.children

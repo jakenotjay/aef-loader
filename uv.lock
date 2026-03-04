@@ -19,6 +19,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "affine" },
+    { name = "dask" },
     { name = "geopandas" },
     { name = "numpy" },
     { name = "obstore" },
@@ -39,7 +40,6 @@ benchmark = [
     { name = "xee" },
 ]
 dev = [
-    { name = "dask" },
     { name = "prek" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -54,6 +54,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "affine", specifier = ">=2.4.0" },
+    { name = "dask", specifier = ">=2024.1.0" },
     { name = "geopandas", specifier = ">=0.14.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "obstore", specifier = ">=0.4.0" },
@@ -74,7 +75,6 @@ benchmark = [
     { name = "xee", specifier = ">=0.0.24" },
 ]
 dev = [
-    { name = "dask", specifier = ">=2026.1.2" },
     { name = "prek", specifier = ">=0.3.4" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },

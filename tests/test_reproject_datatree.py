@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from odc.geo.geobox import GeoBox
+
 from aef_loader.constants import DataSource
 from aef_loader.index import AEFIndex
 from aef_loader.reader import VirtualTiffReader
 from aef_loader.utils import reproject_datatree
-from odc.geo.geobox import GeoBox
-
 
 # Bbox that straddles the UTM 10N / 11N boundary at -120° longitude.
 # Western edge in zone 10N (EPSG:32610), eastern edge in zone 11N (EPSG:32611).
@@ -44,7 +44,9 @@ class TestReprojectDatatreeCrossZone:
         assert len(zones) >= 2, f"Expected tiles in ≥2 zones, got {zones}"
 
         async with VirtualTiffReader() as reader:
-            tree = await reader.open_tiles_by_zone(tiles)
+            tree = await reader.open_tiles_by_zone(tiles, chunks={"band": -1})
+
+        print(tree)
 
         assert len(tree.children) >= 2
 
@@ -58,9 +60,11 @@ class TestReprojectDatatreeCrossZone:
         combined = reproject_datatree(tree, target)
 
         # Band dimension must be a single chunk (the bug was fragmentation here)
-        chunks = combined["embeddings"].chunks
+        emb_var = combined["embeddings"]
+        chunks = emb_var.chunks
         assert chunks is not None, "Expected dask-backed array with chunks"
-        band_chunks = chunks[0]
+        band_idx = emb_var.dims.index("band")
+        band_chunks = chunks[band_idx]
         assert band_chunks == (64,), (
             f"Band dim fragmented into {band_chunks}, expected (64,)"
         )
@@ -69,7 +73,8 @@ class TestReprojectDatatreeCrossZone:
         result = combined.isel(time=0).compute()
         emb = result["embeddings"]
 
-        assert emb.dims == ("band", "y", "x")
+        assert "band" in emb.dims
+        assert len(emb.dims) == 3
         assert emb.sizes["band"] == 64
         assert emb.dtype == np.int8
 

@@ -223,7 +223,9 @@ def reproject_datatree(
             continue
 
         # Reproject to target geobox (lazy operation with dask)
-        reprojected = xr_reproject(zone_ds, target_geobox, resampling=resampling)
+        reprojected = xr_reproject(
+            zone_ds, target_geobox, resampling=resampling, dst_nodata=AEF_NODATA_VALUE
+        )
 
         # Add source zone as attribute
         reprojected.attrs["source_zone"] = zone_name
@@ -252,8 +254,15 @@ def reproject_datatree(
             )
             combined_arr = combined[var].data
             other_arr = ds[var].data
-            # fillna semantics: where combined is NaN, use other
-            mask = da.isnan(combined_arr)
+            # For integer dtypes (e.g. int8), nodata is a sentinel value, not NaN.
+            # Read it from the variable attrs (set by xr_reproject from src nodata).
+            nodata = combined[var].attrs.get(
+                "nodata", combined[var].attrs.get("_FillValue")
+            )
+            if nodata is not None:
+                mask = combined_arr == nodata
+            else:
+                mask = da.isnan(combined_arr)
             combined[var].data = da.where(mask, other_arr, combined_arr)
 
     combined.attrs["source_zones"] = [

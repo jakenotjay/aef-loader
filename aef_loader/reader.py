@@ -27,6 +27,7 @@ from virtualizarr.registry import ObjectStoreRegistry
 from xarray import DataTree
 
 from aef_loader.constants import SOURCE_COOP_REGION
+from aef_loader.utils import set_aef_nodata
 
 if TYPE_CHECKING:
     from aef_loader.types import AEFTileInfo
@@ -260,6 +261,9 @@ class VirtualTiffReader:
 
         Each UTM zone becomes a group in the DataTree, containing a Dataset
         with a single 'embeddings' variable with a band dimension (A00–A63).
+        Both ``nodata`` and ``_FillValue`` attrs are set to ``-128`` on each
+        embeddings variable so that downstream tools (odc-geo ``xr_reproject``,
+        xarray) correctly identify the AEF nodata sentinel.
 
         This is the primary method for loading AEF data. It keeps each zone's
         data in its native CRS for accurate spatial operations. To combine
@@ -341,6 +345,8 @@ class VirtualTiffReader:
 
         All tiles must be in the same CRS. Combines spatially and temporally,
         keeping bands as a single 'embeddings' variable with a band dimension.
+        Sets both ``nodata`` and ``_FillValue`` to ``-128`` on the output via
+        ``set_aef_nodata``.
         """
         parser = VirtualTIFF(ifd=ifd)
 
@@ -424,7 +430,7 @@ class VirtualTiffReader:
             band_names = [f"A{i:02d}" for i in range(da.sizes["band"])]
             da = da.assign_coords(band=band_names)
             da.name = "embeddings"
-            da.attrs["nodata"] = -128
+            da = set_aef_nodata(da)
             combined = da.to_dataset()
 
         return combined

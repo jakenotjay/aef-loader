@@ -19,6 +19,7 @@ from aef_loader.utils import (
     mask_nodata,
     quantize_aef,
     reproject_datatree,
+    set_aef_nodata,
     split_bands,
 )
 
@@ -34,6 +35,7 @@ __all__ = [
     "mask_nodata",
     "quantize_aef",
     "reproject_datatree",
+    "set_aef_nodata",
     "split_bands",
 ]
 

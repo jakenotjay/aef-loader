@@ -7,6 +7,7 @@ from aef_loader.utils import (
     dequantize_aef,
     mask_nodata,
     quantize_aef,
+    set_aef_nodata,
     split_bands,
 )
 
@@ -48,6 +49,20 @@ class TestDequantizeAef:
 
         assert result.dtype == np.float32
         assert result.attrs["dequantized"] is True
+
+    @pytest.mark.unit
+    def test_dequantize_nodata_attrs(self):
+        """Test dequantize sets both nodata and _FillValue to NaN."""
+        data = np.array([127, -127, -128], dtype=np.int8)
+        da = xr.DataArray(data, dims=["x"])
+        da.attrs["nodata"] = -128
+        da.attrs["custom"] = "user_value"
+
+        result = dequantize_aef(da)
+
+        assert np.isnan(result.attrs["_FillValue"])
+        assert np.isnan(result.attrs["nodata"])
+        assert result.attrs["custom"] == "user_value"
 
     @pytest.mark.unit
     def test_dequantize_xarray_dataset(self):
@@ -92,6 +107,39 @@ class TestQuantizeAef:
         dequantized = dequantize_aef(quantized)
 
         np.testing.assert_allclose(original, dequantized, rtol=0.02, atol=0.01)
+
+    @pytest.mark.unit
+    def test_quantize_nodata_attrs(self):
+        """Test quantize sets both nodata and _FillValue to -128."""
+        data = np.array([1.0, -1.0, 0.0], dtype=np.float32)
+        da = xr.DataArray(data, dims=["x"])
+        da.attrs["_FillValue"] = np.nan
+        da.attrs["custom"] = "user_value"
+
+        result = quantize_aef(da)
+
+        assert result.attrs["nodata"] == -128
+        assert result.attrs["_FillValue"] == -128
+        assert result.attrs["custom"] == "user_value"
+
+    @pytest.mark.unit
+    def test_roundtrip_nodata_attrs(self):
+        """Test quantize(dequantize(x)) preserves correct attrs at each stage."""
+        data = np.array([127, -127, 0, -128], dtype=np.int8)
+        da = xr.DataArray(data, dims=["x"])
+        da.attrs["nodata"] = -128
+        da.attrs["custom"] = "survives_roundtrip"
+
+        dequantized = dequantize_aef(da)
+        assert isinstance(dequantized, xr.DataArray)
+        assert np.isnan(dequantized.attrs["_FillValue"])
+        assert np.isnan(dequantized.attrs["nodata"])
+        assert dequantized.attrs["custom"] == "survives_roundtrip"
+
+        requantized = quantize_aef(dequantized)
+        assert requantized.attrs["nodata"] == -128
+        assert requantized.attrs["_FillValue"] == -128
+        assert requantized.attrs["custom"] == "survives_roundtrip"
 
 
 class TestSplitBands:
@@ -144,3 +192,69 @@ class TestMaskNodata:
         assert result.isnull()[1].item()
         assert not result.isnull()[0].item()
         assert not result.isnull()[2].item()
+
+
+class TestSetAefNodata:
+    """Tests for set_aef_nodata function."""
+
+    @pytest.mark.unit
+    def test_set_nodata_default(self):
+        """Test default stamps both nodata and _FillValue to -128."""
+        da = xr.DataArray(np.array([1, 2, 3], dtype=np.int8), dims=["x"])
+        da.attrs["custom"] = "kept"
+
+        result = set_aef_nodata(da)
+
+        assert result.attrs["nodata"] == -128
+        assert result.attrs["_FillValue"] == -128
+        assert result.attrs["custom"] == "kept"
+
+    @pytest.mark.unit
+    def test_set_nodata_nan(self):
+        """Test explicit NaN stamps both nodata and _FillValue to NaN."""
+        da = xr.DataArray(np.array([1.0, 2.0], dtype=np.float32), dims=["x"])
+        da.attrs["custom"] = "kept"
+
+        result = set_aef_nodata(da, nodata=np.nan)
+
+        assert np.isnan(result.attrs["_FillValue"])
+        assert np.isnan(result.attrs["nodata"])
+        assert result.attrs["custom"] == "kept"
+
+    @pytest.mark.unit
+    def test_set_nodata_on_float_promoted_data(self):
+        """Test that float-promoted data still gets nodata=-128 by default."""
+        da = xr.DataArray(np.array([1.0, 2.0], dtype=np.float64), dims=["x"])
+
+        result = set_aef_nodata(da)
+
+        assert result.attrs["nodata"] == -128
+        assert result.attrs["_FillValue"] == -128
+
+    @pytest.mark.unit
+    def test_set_nodata_dataset(self):
+        """Test that Dataset applies both attrs to each variable."""
+        ds = xr.Dataset(
+            {
+                "a": xr.DataArray(np.array([1, 2], dtype=np.int8), dims=["x"]),
+                "b": xr.DataArray(np.array([1.0, 2.0], dtype=np.float32), dims=["x"]),
+            }
+        )
+
+        result = set_aef_nodata(ds, nodata=-128)
+
+        assert result["a"].attrs["nodata"] == -128
+        assert result["a"].attrs["_FillValue"] == -128
+        assert result["b"].attrs["nodata"] == -128
+        assert result["b"].attrs["_FillValue"] == -128
+
+    @pytest.mark.unit
+    def test_does_not_mutate_input(self):
+        """Test that the input DataArray attrs are not modified."""
+        da = xr.DataArray(np.array([1, 2, 3], dtype=np.int8), dims=["x"])
+        da.attrs["_FillValue"] = np.nan
+        original_attrs = dict(da.attrs)
+
+        set_aef_nodata(da)
+
+        assert da.attrs == original_attrs

@@ -121,7 +121,9 @@ class TestReprojectDatatreeBandChunking:
         result = reproject_datatree(tree, geobox)
 
         # Band dimension must remain a single chunk
-        band_chunks = result["embeddings"].chunks[0]
+        chunks = result["embeddings"].chunks
+        assert chunks is not None
+        band_chunks = chunks[0]
         assert band_chunks == (n_bands,), (
             f"Band dim fragmented into {band_chunks}, expected ({n_bands},)"
         )
@@ -240,8 +242,10 @@ class TestReprojectDatatreeBandChunking:
 
         mock_reproject.side_effect = [ds1, ds2]
         tree, geobox = _make_datatree_and_geobox(
-            [_make_dask_dataset((1, 10, 10), band_names),
-             _make_dask_dataset((1, 10, 20), band_names)]
+            [
+                _make_dask_dataset((1, 10, 10), band_names),
+                _make_dask_dataset((1, 10, 20), band_names),
+            ]
         )
 
         with pytest.raises(AssertionError, match="Shape mismatch"):

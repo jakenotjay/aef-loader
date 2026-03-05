@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -19,11 +19,13 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "affine" },
+    { name = "dask" },
     { name = "geopandas" },
     { name = "numpy" },
     { name = "obstore" },
     { name = "odc-geo" },
     { name = "pyarrow" },
+    { name = "rasterio" },
     { name = "shapely" },
     { name = "virtual-tiff" },
     { name = "virtualizarr" },
@@ -53,11 +55,13 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "affine", specifier = ">=2.4.0" },
+    { name = "dask", specifier = ">=2024.1.0" },
     { name = "geopandas", specifier = ">=0.14.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "obstore", specifier = ">=0.4.0" },
     { name = "odc-geo", specifier = ">=0.4.10" },
     { name = "pyarrow", specifier = ">=23.0.1" },
+    { name = "rasterio", specifier = ">=1.4.4" },
     { name = "shapely", specifier = ">=2.0.2" },
     { name = "virtual-tiff", specifier = ">=0.3.1" },
     { name = "virtualizarr", specifier = ">=2.0.0" },

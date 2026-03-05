@@ -32,7 +32,7 @@ tiles = await index.query(
 Opens COGs as virtual zarr stores organized by UTM zone,
 you can pass chunks as a parameter here to control chunking from the start.
 
-For example, its almost certain you want all your bands together on a single worker,
+For example, it's almost certain you want all your bands together on a single worker,
 so you would pass `chunks={"band": -1}` to ensure the band dimension is not split across chunks.
 Otherwise costly rechunks/shuffles are required between workers after zones are merged.
 

@@ -173,12 +173,7 @@ def set_aef_nodata(
         new_vars = {var: set_aef_nodata(data[var], nodata) for var in data.data_vars}
         return data.assign(new_vars)
 
-    new_attrs = {
-        k: v for k, v in data.attrs.items() if k not in ("nodata", "_FillValue")
-    }
-    new_attrs["nodata"] = nodata
-    new_attrs["_FillValue"] = nodata
-    return data.drop_attrs().assign_attrs(new_attrs)
+    return data.assign_attrs({"nodata": nodata, "_FillValue": nodata})
 
 
 def split_bands(ds: xr.Dataset, var: str = "embeddings") -> xr.Dataset:
@@ -298,6 +293,8 @@ def reproject_datatree(
     for ds in reprojected_datasets[1:]:
         combined = combined.combine_first(ds)
 
+    # Defensive: combine_first may not preserve attrs from all sources,
+    # so re-stamp nodata on the final merged dataset.
     if dst_nodata is not None:
         combined = set_aef_nodata(combined, nodata=dst_nodata)
     combined.attrs["source_zones"] = [

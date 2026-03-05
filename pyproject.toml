@@ -20,6 +20,7 @@ dependencies = [
     "odc-geo>=0.4.10",
     "pyarrow>=23.0.1",
     "dask>=2024.1.0",
+    "rasterio>=1.4.4",
 ]
 
 [dependency-groups]

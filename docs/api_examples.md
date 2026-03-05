@@ -29,7 +29,12 @@ tiles = await index.query(
 
 ## VirtualTiffReader
 
-Opens COGs as virtual zarr stores organized by UTM zone.
+Opens COGs as virtual zarr stores organized by UTM zone,
+you can pass chunks as a parameter here to control chunking from the start.
+
+For example, its almost certain you want all your bands together on a single worker,
+so you would pass `chunks={"band": -1}` to ensure the band dimension is not split across chunks.
+Otherwise costly rechunks/shuffles are required between workers after zones are merged.
 
 ```python
 from aef_loader import VirtualTiffReader
@@ -70,7 +75,9 @@ masked = mask_nodata(data)
 
 ### `dequantize_aef`
 
-Dequantize int8 embeddings to float32.
+Dequantize int8 embeddings to float32. NoData values (-128) become NaN.
+Sets both `nodata` and `_FillValue` attrs to `NaN` on the output; all other
+existing attrs are preserved.
 
 Formula: `((value / 127.5) ** 2) * sign(value)`
 
@@ -78,21 +85,50 @@ Formula: `((value / 127.5) ** 2) * sign(value)`
 from aef_loader import dequantize_aef
 
 float_data = dequantize_aef(data)
+# float_data.attrs["nodata"]     -> NaN
+# float_data.attrs["_FillValue"] -> NaN
 ```
 
 ### `quantize_aef`
 
 Quantize float32 embeddings back to int8 for storage. Useful after dequantizing, reprojecting with bilinear interpolation, and re-quantizing.
+Sets both `nodata` and `_FillValue` attrs to `-128` on the output; all other
+existing attrs are preserved.
 
 ```python
 from aef_loader import quantize_aef
 
 int8_data = quantize_aef(float_data)
+# int8_data.attrs["nodata"]     -> -128
+# int8_data.attrs["_FillValue"] -> -128
+```
+
+### `set_aef_nodata`
+
+Stamp `nodata` and `_FillValue` attrs on a DataArray or Dataset.
+Returns a new object (the input is not modified). Defaults to `-128`
+(the AEF int8 sentinel); pass `np.nan` for dequantized float data.
+
+```python
+from aef_loader import set_aef_nodata
+
+# Raw / quantized embeddings
+da = set_aef_nodata(da)              # nodata=-128, _FillValue=-128
+
+# Dequantized float data
+da = set_aef_nodata(da, nodata=np.nan)  # nodata=NaN, _FillValue=NaN
 ```
 
 ### `reproject_datatree`
 
-Reproject all zones in a DataTree to a common CRS.
+Reproject all zones in a DataTree to a common CRS. 
+
+While not recommended, you can provide `dst_nodata` to reproject with a different nodata value.
+
+Generally speaking, the library handles the change in the nodata value, e.g. when you
+dequantise from int8 to float32, nodata changes from -128 to NaN.  This is done 
+internally by setting the correct nodata value on the output of each transformation via 
+`set_aef_nodata` so that downstream tools like `xr_reproject` can read it and handle it correctly during reprojection.
 
 ```python
 from aef_loader.utils import reproject_datatree
@@ -101,7 +137,7 @@ from odc.geo.geobox import GeoBox
 target = GeoBox.from_bbox(
     bbox=(-122.5, 37.5, -122.0, 38.0),
     crs="EPSG:4326",
-    resolution=0.0001,  # ~10m
+    resolution=0.0001,
 )
 combined = reproject_datatree(tree, target)
 ```

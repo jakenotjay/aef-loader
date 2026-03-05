@@ -41,6 +41,11 @@
       show_source: false
       heading_level: 3
 
+::: aef_loader.set_aef_nodata
+    options:
+      show_source: false
+      heading_level: 3
+
 ::: aef_loader.split_bands
     options:
       show_source: false

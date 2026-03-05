@@ -4,7 +4,7 @@ Utility functions for AEF data processing.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import numpy as np
 import xarray as xr
@@ -33,7 +33,10 @@ def dequantize_aef(
 
     The formula is: ((value / 127.5) ** 2) * sign(value)
 
-    NoData values (-128) are automatically converted to NaN.
+    NoData values (-128) are automatically converted to NaN. For DataArray
+    inputs, both ``nodata`` and ``_FillValue`` attrs are set to ``NaN`` on
+    the output so that downstream tools (odc-geo, xarray) recognise the
+    new fill value. All other existing attrs are preserved.
 
     Args:
         data: Quantized embedding data (int8)
@@ -72,8 +75,7 @@ def dequantize_aef(
         )
         result.attrs["units"] = "embedding"
         result.attrs["dequantized"] = True
-        result.attrs["_FillValue"] = np.nan
-        return result
+        return set_aef_nodata(result, nodata=np.nan)
     else:
         dequantized = np.where(nodata_mask, np.nan, dequantized)
 
@@ -90,6 +92,11 @@ def quantize_aef(
     This is the inverse of dequantize_aef().
     Dequantization: ((v / 127.5) ** 2) * sign(v)
     Quantization (inverse): sign(v) * sqrt(|v|) * 127.5
+
+    For DataArray inputs, both ``nodata`` and ``_FillValue`` attrs are set
+    to ``-128`` (AEF_NODATA_VALUE) on the output so that downstream tools
+    (odc-geo, xarray) recognise the int8 nodata sentinel. All other
+    existing attrs are preserved.
 
     Args:
         data: Float32 embedding data in range [-1, 1]
@@ -114,7 +121,7 @@ def quantize_aef(
             attrs=data.attrs.copy(),
         )
         result.attrs["quantized"] = True
-        return result
+        return set_aef_nodata(result, nodata=AEF_NODATA_VALUE)
 
     return quantized
 
@@ -139,6 +146,34 @@ def mask_nodata(
     if isinstance(data, xr.DataArray):
         return data.where(data != nodata_value)
     return np.where(data == nodata_value, np.nan, data.astype(np.float32))
+
+
+@overload
+def set_aef_nodata(data: xr.DataArray, nodata: int | float = ...) -> xr.DataArray: ...
+
+
+@overload
+def set_aef_nodata(data: xr.Dataset, nodata: int | float = ...) -> xr.Dataset: ...
+
+
+def set_aef_nodata(
+    data: xr.DataArray | xr.Dataset,
+    nodata: int | float = AEF_NODATA_VALUE,
+) -> xr.DataArray | xr.Dataset:
+    """Return a copy with the nodata and _FillValue attributes set explicitly.
+
+    Args:
+        data: Input DataArray or Dataset.
+        nodata: The nodata sentinel to stamp. Use AEF_NODATA_VALUE (-128) for
+                raw/quantized embeddings, or np.nan for dequantized float data.
+
+    The input is not modified; a shallow copy (shared data, new attrs) is returned.
+    """
+    if isinstance(data, xr.Dataset):
+        new_vars = {var: set_aef_nodata(data[var], nodata) for var in data.data_vars}
+        return data.assign(new_vars)
+
+    return data.assign_attrs({"nodata": nodata, "_FillValue": nodata})
 
 
 def split_bands(ds: xr.Dataset, var: str = "embeddings") -> xr.Dataset:
@@ -166,6 +201,7 @@ def reproject_datatree(
     tree: DataTree,
     target_geobox: GeoBox,
     resampling: str = "nearest",
+    dst_nodata: int | float | None = None,
 ) -> xr.Dataset:
     """
     Reproject all zones in a DataTree to a common target GeoBox.
@@ -192,6 +228,11 @@ def reproject_datatree(
                        Can be created with GeoBox.from_bbox() or from an existing dataset.
         resampling: Resampling method - "nearest", "bilinear", "cubic", etc.
                     Default is "nearest" which preserves original int8 values.
+        dst_nodata: Nodata value for the output. When None (default), xr_reproject
+                    reads the value from the source DataArray's nodata/_FillValue attrs.
+                    When set, the value is passed to xr_reproject and both ``nodata``
+                    and ``_FillValue`` attrs are stamped on each output data variable
+                    after reprojection and after the zone merge.
 
     Returns:
         Combined xr.Dataset with all zones reprojected to the target GeoBox.
@@ -213,7 +254,11 @@ def reproject_datatree(
         result = combined.compute()  # triggers actual reprojection
         ```
     """
-    reprojected_datasets = []
+    reproject_kwargs: dict = {"resampling": resampling}
+    if dst_nodata is not None:
+        reproject_kwargs["dst_nodata"] = dst_nodata
+
+    reprojected_datasets: list[xr.Dataset] = []
 
     for zone_name in tree.children:
         zone_ds = tree[zone_name].ds
@@ -223,9 +268,10 @@ def reproject_datatree(
             continue
 
         # Reproject to target geobox (lazy operation with dask)
-        reprojected = xr_reproject(
-            zone_ds, target_geobox, resampling=resampling, dst_nodata=AEF_NODATA_VALUE
-        )
+        reprojected = xr_reproject(zone_ds, target_geobox, **reproject_kwargs)
+
+        if dst_nodata is not None:
+            reprojected = set_aef_nodata(reprojected, nodata=dst_nodata)
 
         # Add source zone as attribute
         reprojected.attrs["source_zone"] = zone_name
@@ -265,6 +311,10 @@ def reproject_datatree(
                 mask = da.isnan(combined_arr)
             combined[var].data = da.where(mask, other_arr, combined_arr)
 
+    # Defensive: combine_first may not preserve attrs from all sources,
+    # so re-stamp nodata on the final merged dataset.
+    if dst_nodata is not None:
+        combined = set_aef_nodata(combined, nodata=dst_nodata)
     combined.attrs["source_zones"] = [
         tree[z].ds.attrs.get("utm_zone", z) for z in tree.children
     ]

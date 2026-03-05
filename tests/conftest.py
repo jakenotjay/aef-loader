@@ -21,6 +21,10 @@ def pytest_configure(config):
         "markers",
         "requires_aws: Tests that require AWS S3 access (Source Cooperative)",
     )
+    config.addinivalue_line(
+        "markers",
+        "slow: Slow tests that hit real cloud data. Run manually with: uv run pytest -m slow",
+    )
 
 
 @pytest.fixture

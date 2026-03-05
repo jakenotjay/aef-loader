@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, overload
 
+import math
+
 import numpy as np
 import xarray as xr
 from odc.geo.xr import xr_reproject
@@ -293,22 +295,25 @@ def reproject_datatree(
         for var in combined.data_vars:
             if var not in ds.data_vars:
                 continue
-            assert combined[var].shape == ds[var].shape, (
-                f"Shape mismatch merging zones: {combined[var].shape} vs {ds[var].shape}"
-            )
+            if combined[var].shape != ds[var].shape:
+                raise ValueError(
+                    f"Shape mismatch merging zones for '{var}': "
+                    f"{combined[var].shape} vs {ds[var].shape}"
+                )
             # For integer dtypes (e.g. int8), nodata is a sentinel value, not NaN.
             # Read it from the variable attrs (set by xr_reproject from src nodata).
             nodata = combined[var].attrs.get(
                 "nodata", combined[var].attrs.get("_FillValue")
             )
-            if nodata is not None:
+            if nodata is not None and not (
+                isinstance(nodata, float) and math.isnan(nodata)
+            ):
                 mask = combined[var] == nodata
             else:
                 mask = combined[var].isnull()
             combined[var] = xr.where(mask, ds[var], combined[var], keep_attrs=True)
 
-    # Defensive: combine_first may not preserve attrs from all sources,
-    # so re-stamp nodata on the final merged dataset.
+    # Re-stamp nodata on the final merged dataset to ensure consistency.
     if dst_nodata is not None:
         combined = set_aef_nodata(combined, nodata=dst_nodata)
     combined.attrs["source_zones"] = [

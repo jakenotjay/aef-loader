@@ -198,14 +198,14 @@ class VirtualTiffReader:
         self._stores: dict[str, object] = {}  # Cache stores by (protocol, bucket)
         self._registry = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> VirtualTiffReader:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self._stores.clear()
         self._registry = None
 
-    def _get_gcs_store(self, bucket: str):
+    def _get_gcs_store(self, bucket: str) -> GCSStore:
         """Get or create an obstore GCSStore for a bucket."""
         if not self.gcp_project:
             raise ValueError(
@@ -218,7 +218,7 @@ class VirtualTiffReader:
             },
         )
 
-    def _get_s3_store(self, bucket: str):
+    def _get_s3_store(self, bucket: str) -> S3Store:
         """Get or create an obstore S3Store for a bucket (Source Cooperative)."""
         return S3Store(
             bucket=bucket,
@@ -308,7 +308,7 @@ class VirtualTiffReader:
             logger.info(f"Processing zone {zone}: {len(zone_tiles)} tiles")
 
             # Combine tiles within the zone
-            ds = await self._combine_tiles_single_zone(zone_tiles, ifd)
+            ds = await self._combine_tiles_single_zone(zone_tiles, ifd, chunks=chunks)
 
             # Add CRS metadata using odc-geo
             crs = f"EPSG:{zone_tiles[0].crs_epsg}"
@@ -424,6 +424,7 @@ class VirtualTiffReader:
             band_names = [f"A{i:02d}" for i in range(da.sizes["band"])]
             da = da.assign_coords(band=band_names)
             da.name = "embeddings"
+            da.attrs["nodata"] = -128
             combined = da.to_dataset()
 
         return combined

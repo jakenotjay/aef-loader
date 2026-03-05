@@ -283,13 +283,11 @@ def reproject_datatree(
     if len(reprojected_datasets) == 1:
         return reprojected_datasets[0]
 
-    # Merge at dask.array level to preserve chunk structure.
+    # Merge with xr.where to preserve chunk structure.
     # combine_first triggers xr.align(join="outer") which reindexes the band
     # dimension, fragmenting band chunks. Since all datasets share the same
     # target GeoBox, they have identical shapes and coordinates, so we can
-    # merge directly with da.where (a blockwise op that preserves chunks).
-    import dask.array as da
-
+    # merge directly with xr.where (a blockwise op that preserves chunks).
     combined = reprojected_datasets[0]
     for ds in reprojected_datasets[1:]:
         for var in combined.data_vars:
@@ -298,18 +296,16 @@ def reproject_datatree(
             assert combined[var].shape == ds[var].shape, (
                 f"Shape mismatch merging zones: {combined[var].shape} vs {ds[var].shape}"
             )
-            combined_arr = combined[var].data
-            other_arr = ds[var].data
             # For integer dtypes (e.g. int8), nodata is a sentinel value, not NaN.
             # Read it from the variable attrs (set by xr_reproject from src nodata).
             nodata = combined[var].attrs.get(
                 "nodata", combined[var].attrs.get("_FillValue")
             )
             if nodata is not None:
-                mask = combined_arr == nodata
+                mask = combined[var] == nodata
             else:
-                mask = da.isnan(combined_arr)
-            combined[var].data = da.where(mask, other_arr, combined_arr)
+                mask = combined[var].isnull()
+            combined[var] = xr.where(mask, ds[var], combined[var], keep_attrs=True)
 
     # Defensive: combine_first may not preserve attrs from all sources,
     # so re-stamp nodata on the final merged dataset.

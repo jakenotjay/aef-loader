@@ -6,8 +6,9 @@ aef-loader supports two dataset hosts, each with tradeoffs.
 
 - **No authentication required** — Public bucket on AWS S3
 - **URL**: `s3://us-west-2.opendata.source.coop/tge-labs/aef/`
-- **Limitations**: 2017 and 2025 data not yet available
+- **Coverage**: Full time range (2017-2025)
 - **Documentation**: https://source.coop/tge-labs/aef
+- **Recommended** for most users
 
 ```python
 from aef_loader import AEFIndex, DataSource

@@ -142,6 +142,44 @@ target = GeoBox.from_bbox(
 combined = reproject_datatree(tree, target)
 ```
 
+### Selective Band Loading
+
+Load only specific embedding bands instead of all 64. Unselected bands are
+never fetched from cloud storage — filtering happens at the chunk manifest
+level before any dask tasks are created.
+
+```python
+from aef_loader import VirtualTiffReader
+
+# By name (A00–A63)
+async with VirtualTiffReader() as reader:
+    tree = await reader.open_tiles_by_zone(tiles, bands=["A00", "A01", "A02", "A03"])
+
+# By index (0–63)
+async with VirtualTiffReader() as reader:
+    tree = await reader.open_tiles_by_zone(tiles, bands=[0, 1, 2, 3])
+```
+
+This is useful after a PCA analysis has identified which embedding dimensions
+carry the most task-relevant variance. For example, AEF packs 80% of its
+variance into just 8 dimensions:
+
+```python
+from sklearn.decomposition import PCA
+
+# Fit PCA on a sample to find the most informative bands
+pca = PCA(n_components=8).fit(sample_embeddings)
+
+# Identify which original bands contribute most to each component
+top_bands = sorted(set(
+    abs(pca.components_).argmax(axis=1)
+))
+
+# Load only those bands from cloud storage
+async with VirtualTiffReader() as reader:
+    tree = await reader.open_tiles_by_zone(tiles, bands=top_bands)
+```
+
 ### `split_bands`
 
 Split a multi-band dataset into individual band variables.

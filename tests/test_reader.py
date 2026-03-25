@@ -112,12 +112,12 @@ class TestNormalizeBandIndices:
     @pytest.mark.unit
     def test_mixed_types_str_first(self):
         with pytest.raises(TypeError, match="not a mix"):
-            _normalize_band_indices(["A00", 1])
+            _normalize_band_indices(["A00", 1])  # type: ignore[list-item]
 
     @pytest.mark.unit
     def test_mixed_types_int_first(self):
         with pytest.raises(TypeError, match="not a mix"):
-            _normalize_band_indices([0, "A01"])
+            _normalize_band_indices([0, "A01"])  # type: ignore[list-item]
 
     @pytest.mark.unit
     def test_empty_list(self):

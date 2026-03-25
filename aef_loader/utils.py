@@ -150,6 +150,45 @@ def mask_nodata(
     return np.where(data == nodata_value, np.nan, data.astype(np.float32))
 
 
+def int8_to_float32(
+    data: np.ndarray | xr.DataArray | xr.Dataset,
+    nodata_value: int = AEF_NODATA_VALUE,
+) -> np.ndarray | xr.DataArray | xr.Dataset:
+    """
+    Cast int8 AEF embeddings to float32 without dequantization.
+
+    Unlike dequantize_aef(), this performs a simple type cast: int8 values
+    become their float32 equivalents (e.g. 64 -> 64.0, not 0.252).
+    NoData values (-128) are replaced with NaN.
+
+    For DataArray inputs, both ``nodata`` and ``_FillValue`` attrs are set
+    to ``NaN`` on the output. All other existing attrs are preserved.
+
+    Args:
+        data: Quantized embedding data (int8)
+        nodata_value: Value to treat as nodata (default: -128)
+
+    Returns:
+        Float32 data with raw int8 values preserved, NaN for nodata
+    """
+    if isinstance(data, xr.Dataset):
+        return data.map(lambda x: int8_to_float32(x, nodata_value))
+
+    nodata_mask = data == nodata_value
+
+    if isinstance(data, xr.DataArray):
+        converted = xr.where(nodata_mask, np.nan, data.astype(np.float32))
+        result = xr.DataArray(
+            converted,
+            dims=data.dims,
+            coords=data.coords,
+            attrs=data.attrs.copy(),
+        )
+        return set_aef_nodata(result, nodata=np.nan)
+
+    return np.where(nodata_mask, np.nan, data.astype(np.float32))
+
+
 @overload
 def set_aef_nodata(data: xr.DataArray, nodata: int | float = ...) -> xr.DataArray: ...
 

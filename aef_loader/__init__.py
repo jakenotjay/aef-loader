@@ -16,6 +16,7 @@ from aef_loader.reader import VirtualTiffReader
 from aef_loader.types import AEFTileInfo
 from aef_loader.utils import (
     dequantize_aef,
+    int8_to_float32,
     mask_nodata,
     quantize_aef,
     reproject_datatree,
@@ -32,6 +33,7 @@ __all__ = [
     "DataSource",
     # Utility functions
     "dequantize_aef",
+    "int8_to_float32",
     "mask_nodata",
     "quantize_aef",
     "reproject_datatree",

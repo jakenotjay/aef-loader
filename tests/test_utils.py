@@ -5,6 +5,7 @@ import pytest
 import xarray as xr
 from aef_loader.utils import (
     dequantize_aef,
+    int8_to_float32,
     mask_nodata,
     quantize_aef,
     set_aef_nodata,
@@ -192,6 +193,83 @@ class TestMaskNodata:
         assert result.isnull()[1].item()
         assert not result.isnull()[0].item()
         assert not result.isnull()[2].item()
+
+
+class TestInt8ToFloat32:
+    """Tests for int8_to_float32 function."""
+
+    @pytest.mark.unit
+    def test_numpy_basic(self):
+        """Test int8 input [127, -127, 0, -128] -> float32 [127.0, -127.0, 0.0, NaN]."""
+        data = np.array([127, -127, 0, -128], dtype=np.int8)
+        result = int8_to_float32(data)
+
+        assert result.dtype == np.float32
+        np.testing.assert_array_equal(result[:3], [127.0, -127.0, 0.0])
+        assert np.isnan(result[3])
+
+    @pytest.mark.unit
+    def test_xarray_dataarray(self):
+        """Test float32 dtype and nodata/FillValue attrs on DataArray output."""
+        data = np.array([127, -127, 0, -128], dtype=np.int8)
+        da = xr.DataArray(data, dims=["x"])
+
+        result = int8_to_float32(da)
+
+        assert result.dtype == np.float32
+        assert np.isnan(result.attrs["nodata"])
+        assert np.isnan(result.attrs["_FillValue"])
+
+    @pytest.mark.unit
+    def test_xarray_dataset(self):
+        """Test that Dataset maps over all data variables."""
+        data = np.array([[127, -128], [64, 0]], dtype=np.int8)
+        ds = xr.Dataset({"var1": (["y", "x"], data)})
+
+        result = int8_to_float32(ds)
+
+        assert result["var1"].dtype == np.float32
+        assert result["var1"].values[0, 0] == 127.0
+        assert np.isnan(result["var1"].values[0, 1])
+
+    @pytest.mark.unit
+    def test_preserves_coords_and_attrs(self):
+        """Test that custom attrs and coords survive the conversion."""
+        data = np.array([64, -128], dtype=np.int8)
+        da = xr.DataArray(
+            data,
+            dims=["x"],
+            coords={"x": [10, 20]},
+            attrs={"custom": "value", "source": "test"},
+        )
+
+        result = int8_to_float32(da)
+
+        assert result.attrs["custom"] == "value"
+        assert result.attrs["source"] == "test"
+        np.testing.assert_array_equal(result.coords["x"].values, [10, 20])
+
+    @pytest.mark.unit
+    def test_values_are_raw_not_dequantized(self):
+        """Test that values are simply cast, not transformed by the dequantization formula."""
+        data = np.array([127, -127, 64, -64, 1, 0], dtype=np.int8)
+        result = int8_to_float32(data)
+
+        np.testing.assert_array_equal(result, data.astype(np.float32))
+
+    @pytest.mark.unit
+    def test_custom_nodata_value(self):
+        """Test that a non-default nodata_value is respected."""
+        data = np.array([127, -127, 0, -1], dtype=np.int8)
+        result = int8_to_float32(data, nodata_value=-1)
+
+        assert result.dtype == np.float32
+        np.testing.assert_array_equal(result[:3], [127.0, -127.0, 0.0])
+        assert np.isnan(result[3])
+        # -128 should NOT be masked when using a custom nodata
+        data2 = np.array([-128, 10], dtype=np.int8)
+        result2 = int8_to_float32(data2, nodata_value=-1)
+        assert result2[0] == -128.0
 
 
 class TestSetAefNodata:

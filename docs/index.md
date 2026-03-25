@@ -22,7 +22,7 @@ aef-loader provides two key functionalities:
 
 As additional utilities:
 
-- dequantize, and requantize the embeddings
+- dequantize, requantize, or raw-cast (int8 → float32) the embeddings
 - split the "embeddings" dataset into 64 datasets
 - use odc-geobox for dask aware reprojections for creating multi-zone composites
 
@@ -33,7 +33,7 @@ Alpha Earth Foundations embeddings is a dataset produced by Google Deepmind, pro
 aef-loader supports two dataset hosts, both having tradeoffs:
 
 1. [Google Cloud Storage](https://developers.google.com/earth-engine/guides/aef_on_gcs_readme) - maintained by the [Earth Engine](https://earthengine.google.com/) team, more up to date but requiring authentication and "[requester pays](https://docs.cloud.google.com/storage/docs/requester-pays)", meaning users must pay egress and other charges.
-2. [Source Cooperative](https://source.coop/tge-labs/aef) - Hosted on AWS S3 and free to access, includes the full time range (2017-2025)
+2. [Source Cooperative](https://source.coop/tge-labs/aef) - Hosted on AWS S3 and free to access, includes the full time range (2017-2025) **Recommended**
 
 
 ## Installation

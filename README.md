@@ -22,7 +22,7 @@ aef-loader provides two key functionalities:
 
 As additional utilities:
 
-- dequantize, and requantize the embeddings
+- dequantize, requantize, or raw-cast (int8 → float32) the embeddings
 - split the "embeddings" dataset into 64 datasets
 - use odc-geobox for dask aware reprojections for creating multi-zone composites
 

@@ -89,6 +89,20 @@ float_data = dequantize_aef(data)
 # float_data.attrs["_FillValue"] -> NaN
 ```
 
+### `int8_to_float32`
+
+Cast int8 embeddings to float32 without dequantization. Unlike `dequantize_aef`,
+this performs a simple type cast (e.g. 64 → 64.0, not 0.252). NoData values
+(-128) become NaN. Useful for pipelines where the quantized embeddings are
+statistically equivalent and the nonlinear dequantization is unnecessary.
+
+```python
+from aef_loader import int8_to_float32
+
+float_data = int8_to_float32(data)
+# 64 (int8) -> 64.0 (float32), -128 -> NaN
+```
+
 ### `quantize_aef`
 
 Quantize float32 embeddings back to int8 for storage. Useful after dequantizing, reprojecting with bilinear interpolation, and re-quantizing.

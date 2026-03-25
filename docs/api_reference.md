@@ -41,6 +41,11 @@
       show_source: false
       heading_level: 3
 
+::: aef_loader.int8_to_float32
+    options:
+      show_source: false
+      heading_level: 3
+
 ::: aef_loader.set_aef_nodata
     options:
       show_source: false

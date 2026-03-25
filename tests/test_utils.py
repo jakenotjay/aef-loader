@@ -257,6 +257,20 @@ class TestInt8ToFloat32:
 
         np.testing.assert_array_equal(result, data.astype(np.float32))
 
+    @pytest.mark.unit
+    def test_custom_nodata_value(self):
+        """Test that a non-default nodata_value is respected."""
+        data = np.array([127, -127, 0, -1], dtype=np.int8)
+        result = int8_to_float32(data, nodata_value=-1)
+
+        assert result.dtype == np.float32
+        np.testing.assert_array_equal(result[:3], [127.0, -127.0, 0.0])
+        assert np.isnan(result[3])
+        # -128 should NOT be masked when using a custom nodata
+        data2 = np.array([-128, 10], dtype=np.int8)
+        result2 = int8_to_float32(data2, nodata_value=-1)
+        assert result2[0] == -128.0
+
 
 class TestSetAefNodata:
     """Tests for set_aef_nodata function."""

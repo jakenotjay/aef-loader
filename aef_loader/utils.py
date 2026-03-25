@@ -177,13 +177,7 @@ def int8_to_float32(
     nodata_mask = data == nodata_value
 
     if isinstance(data, xr.DataArray):
-        converted = xr.where(nodata_mask, np.nan, data.astype(np.float32))
-        result = xr.DataArray(
-            converted,
-            dims=data.dims,
-            coords=data.coords,
-            attrs=data.attrs.copy(),
-        )
+        result = data.astype(np.float32).where(~nodata_mask)
         return set_aef_nodata(result, nodata=np.nan)
 
     return np.where(nodata_mask, np.nan, data.astype(np.float32))

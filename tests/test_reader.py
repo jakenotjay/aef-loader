@@ -3,7 +3,11 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from aef_loader.reader import VirtualTiffReader, _parse_gcs_path
+from aef_loader.reader import (
+    VirtualTiffReader,
+    _normalize_band_indices,
+    _parse_gcs_path,
+)
 
 
 class TestParseGcsPath:
@@ -63,3 +67,63 @@ class TestVirtualTiffReader:
 
             mock_gcs.assert_not_called()
             assert store == mock_store
+
+
+class TestNormalizeBandIndices:
+    """Tests for _normalize_band_indices — called directly, no mocking needed."""
+
+    @pytest.mark.unit
+    def test_string_names(self):
+        assert _normalize_band_indices(["A00", "A03", "A63"]) == [0, 3, 63]
+
+    @pytest.mark.unit
+    def test_int_indices(self):
+        assert _normalize_band_indices([0, 3, 63]) == [0, 3, 63]
+
+    @pytest.mark.unit
+    def test_single_band(self):
+        assert _normalize_band_indices(["A32"]) == [32]
+
+    @pytest.mark.unit
+    def test_invalid_name_format(self):
+        with pytest.raises(ValueError, match="Invalid band name"):
+            _normalize_band_indices(["X00"])
+
+    @pytest.mark.unit
+    def test_invalid_name_too_short(self):
+        with pytest.raises(ValueError, match="Invalid band name"):
+            _normalize_band_indices(["A0"])
+
+    @pytest.mark.unit
+    def test_out_of_range_name(self):
+        with pytest.raises(ValueError, match="out of range"):
+            _normalize_band_indices(["A64"])
+
+    @pytest.mark.unit
+    def test_out_of_range_int(self):
+        with pytest.raises(ValueError, match="out of range"):
+            _normalize_band_indices([64])
+
+    @pytest.mark.unit
+    def test_negative_int(self):
+        with pytest.raises(ValueError, match="out of range"):
+            _normalize_band_indices([-1])
+
+    @pytest.mark.unit
+    def test_mixed_types_str_first(self):
+        with pytest.raises(TypeError, match="not a mix"):
+            _normalize_band_indices(["A00", 1])  # type: ignore[list-item]
+
+    @pytest.mark.unit
+    def test_mixed_types_int_first(self):
+        with pytest.raises(TypeError, match="not a mix"):
+            _normalize_band_indices([0, "A01"])  # type: ignore[list-item]
+
+    @pytest.mark.unit
+    def test_empty_list(self):
+        with pytest.raises(ValueError, match="non-empty"):
+            _normalize_band_indices([])
+
+    @pytest.mark.unit
+    def test_preserves_order(self):
+        assert _normalize_band_indices(["A63", "A00", "A32"]) == [63, 0, 32]

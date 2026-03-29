@@ -36,6 +36,52 @@ logger = logging.getLogger(__name__)
 
 PathProtocol = Literal["gs", "s3"]
 
+NUM_AEF_BANDS = 64
+
+
+def _normalize_band_indices(bands: list[str] | list[int]) -> list[int]:
+    """Validate and normalize a bands argument to integer indices (0-63).
+
+    Accepts band names (``["A00", "A03"]``) or integer indices (``[0, 3]``).
+    Raises TypeError for mixed types, ValueError for invalid names or
+    out-of-range indices.
+    """
+    if not bands:
+        raise ValueError("bands must be a non-empty list")
+
+    first = bands[0]
+    if isinstance(first, str):
+        indices: list[int] = []
+        for b in bands:
+            if not isinstance(b, str):
+                raise TypeError(
+                    "bands must be all strings (e.g. ['A00', 'A03']) or all "
+                    "integers (e.g. [0, 3]), not a mix"
+                )
+            if len(b) != 3 or not b.startswith("A") or not b[1:].isdigit():
+                raise ValueError(f"Invalid band name '{b}'. Expected format: A00-A63")
+            idx = int(b[1:])
+            if idx < 0 or idx >= NUM_AEF_BANDS:
+                raise ValueError(f"Band name '{b}' out of range. Expected A00-A63")
+            indices.append(idx)
+        return indices
+
+    if isinstance(first, int):
+        for b in bands:
+            if not isinstance(b, int):
+                raise TypeError(
+                    "bands must be all strings (e.g. ['A00', 'A03']) or all "
+                    "integers (e.g. [0, 3]), not a mix"
+                )
+            if b < 0 or b >= NUM_AEF_BANDS:
+                raise ValueError(f"Band index {b} out of range. Expected 0-63")
+        return [b for b in bands if isinstance(b, int)]
+
+    raise TypeError(
+        "bands must be all strings (e.g. ['A00', 'A03']) or all "
+        "integers (e.g. [0, 3]), not a mix"
+    )
+
 
 def _parse_gcs_path(path: str) -> tuple[str, str]:
     """Parse gs://bucket/key into (bucket, key)."""
@@ -255,6 +301,7 @@ class VirtualTiffReader:
         tiles: list[AEFTileInfo],
         ifd: int = 0,
         chunks: int | dict | Literal["auto"] | None = "auto",
+        bands: list[str] | list[int] | None = None,
     ) -> DataTree:
         """
         Open tiles and organize them by UTM zone in a DataTree.
@@ -274,6 +321,10 @@ class VirtualTiffReader:
             ifd: Image File Directory index (0 for full resolution)
             chunks: The chunks parameter to pass to open_zarr, defaults to auto,
                 useful to pass None to stop dask task explosions
+            bands: Specific bands to load. Accepts band names (e.g.
+                ``["A00", "A03", "A15"]``) or integer indices (e.g.
+                ``[0, 3, 15]``). Unselected bands are never fetched from
+                cloud storage. Defaults to None (all bands).
 
         Returns:
             DataTree with structure:
@@ -295,6 +346,8 @@ class VirtualTiffReader:
         if not tiles:
             raise ValueError("No tiles provided")
 
+        band_indices = _normalize_band_indices(bands) if bands is not None else None
+
         # Group tiles by UTM zone
         tiles_by_zone: dict[str, list[AEFTileInfo]] = defaultdict(list)
         for tile in tiles:
@@ -312,7 +365,12 @@ class VirtualTiffReader:
             logger.info(f"Processing zone {zone}: {len(zone_tiles)} tiles")
 
             # Combine tiles within the zone
-            ds = await self._combine_tiles_single_zone(zone_tiles, ifd, chunks=chunks)
+            ds = await self._combine_tiles_single_zone(
+                zone_tiles,
+                ifd,
+                chunks=chunks,
+                band_indices=band_indices,
+            )
 
             # Add CRS metadata using odc-geo
             crs = f"EPSG:{zone_tiles[0].crs_epsg}"
@@ -339,6 +397,7 @@ class VirtualTiffReader:
         tiles: list[AEFTileInfo],
         ifd: int = 0,
         chunks: int | dict | Literal["auto"] | None = "auto",
+        band_indices: list[int] | None = None,
     ) -> xr.Dataset:
         """
         Combine tiles within a single UTM zone.
@@ -348,7 +407,7 @@ class VirtualTiffReader:
         Sets both ``nodata`` and ``_FillValue`` to ``-128`` on the output via
         ``set_aef_nodata``.
         """
-        parser = VirtualTIFF(ifd=ifd)
+        parser = VirtualTIFF(ifd=ifd, band_indices=band_indices)
 
         async def process_tile(tile: AEFTileInfo) -> xr.Dataset:
             protocol, bucket, key = _parse_cloud_path(tile.path)
@@ -426,8 +485,11 @@ class VirtualTiffReader:
         if "band" in combined.dims:
             data_var = list(combined.data_vars)[0]
             da = combined[data_var]
-            # Assign string band coordinate labels (A00, A01, ..., A63)
-            band_names = [f"A{i:02d}" for i in range(da.sizes["band"])]
+            # Assign string band coordinate labels
+            if band_indices is not None:
+                band_names = [f"A{i:02d}" for i in band_indices]
+            else:
+                band_names = [f"A{i:02d}" for i in range(da.sizes["band"])]
             da = da.assign_coords(band=band_names)
             da.name = "embeddings"
             da = set_aef_nodata(da)

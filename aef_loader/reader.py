@@ -364,6 +364,7 @@ class VirtualTiffReader:
                 zarr_format=3,
                 consolidated=False,
                 chunks=chunks,
+                mask_and_scale=False,
             )
 
             # Extract GeoBox from the model_transformation in the TIFF

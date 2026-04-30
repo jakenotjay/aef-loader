@@ -8,7 +8,7 @@ authors = [
     { name = "Jake Wilkins" }
 ]
 dependencies = [
-    "virtual-tiff>=0.3.1",
+    "virtual-tiff>=0.5.0",
     "virtualizarr>=2.0.0",
     "obstore>=0.4.0",
     "numpy>=1.24.0",

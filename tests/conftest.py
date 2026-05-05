@@ -62,6 +62,39 @@ def mock_gdf():
 
 
 @pytest.fixture
+def mock_fdp_gdf():
+    """Mock GeoDataFrame for FDP index testing.
+
+    Six tiles spanning two commodities × two years across a small bbox in
+    Cameroon (a coffee/cocoa region).
+    """
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    rows = []
+    for commodity in ("coffee", "cocoa"):
+        for year in (2020, 2024):
+            for lng, lat in [(9, 5), (10, 5), (11, 6)]:
+                rows.append(
+                    {
+                        "id": f"{commodity}_{year}_lng_{lng}_lat_{lat}",
+                        "release": "2025b",
+                        "commodity": commodity,
+                        "year": year,
+                        "lng": lng,
+                        "lat": lat,
+                        "path": (
+                            f"gs://earth-engine-public-requester-pays/"
+                            f"forestdatapartnership/2025b/{commodity}/{year}/"
+                            f"lng_{lng}_lat_{lat}.tif"
+                        ),
+                        "geometry": box(lng, lat, lng + 1, lat + 1),
+                    }
+                )
+    return gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:4326")
+
+
+@pytest.fixture
 def mock_source_coop_gdf():
     """Mock GeoDataFrame for Source Cooperative index testing."""
     import geopandas as gpd

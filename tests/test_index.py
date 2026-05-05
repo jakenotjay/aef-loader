@@ -140,7 +140,7 @@ class TestAEFIndex:
         )
 
         with (
-            patch("aef_loader.index.GCSStore") as mock_gcs,
+            patch("aef_loader.index.make_gcs_store") as mock_make_gcs,
             patch("aef_loader.index.obs") as mock_obs,
         ):
             mock_result = MagicMock()
@@ -149,11 +149,8 @@ class TestAEFIndex:
 
             await index.download()
 
-            mock_gcs.assert_called_once_with(
-                bucket="alphaearth_foundations",
-                client_options={
-                    "default_headers": {"x-goog-user-project": "my-project"}
-                },
+            mock_make_gcs.assert_called_once_with(
+                "alphaearth_foundations", "my-project"
             )
 
     @pytest.mark.unit

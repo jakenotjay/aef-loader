@@ -3,7 +3,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from aef_loader.reader import VirtualTiffReader, _parse_gcs_path
+from aef_loader._cloud import parse_gcs_path as _parse_gcs_path
+from aef_loader.reader import VirtualTiffReader
 
 
 class TestParseGcsPath:
@@ -32,24 +33,19 @@ class TestVirtualTiffReader:
         assert reader._stores == {}
 
     @pytest.mark.unit
-    def test_get_gcs_store_with_project(self):
-        """Test that GCS store includes requester-pays header when project is set."""
+    def test_get_store_passes_project_to_make_gcs_store(self):
+        """GCS store creation should forward the requester-pays project."""
         reader = VirtualTiffReader(gcp_project="my-project")
-        with patch("aef_loader.reader.GCSStore") as mock_gcs:
-            reader._get_gcs_store("my-bucket")
-            mock_gcs.assert_called_once_with(
-                bucket="my-bucket",
-                client_options={
-                    "default_headers": {"x-goog-user-project": "my-project"}
-                },
-            )
+        with patch("aef_loader.reader.make_gcs_store") as mock_make:
+            reader._get_store("gs", "my-bucket")
+            mock_make.assert_called_once_with("my-bucket", "my-project")
 
     @pytest.mark.unit
-    def test_get_gcs_store_without_project_raises(self):
-        """Test that GCS store raises when no project is set."""
+    def test_get_store_without_project_raises(self):
+        """GCS store creation must require a project for requester-pays."""
         reader = VirtualTiffReader()
         with pytest.raises(ValueError, match="gcp_project is required"):
-            reader._get_gcs_store("my-bucket")
+            reader._get_store("gs", "my-bucket")
 
     @pytest.mark.unit
     def test_get_store_caches(self):

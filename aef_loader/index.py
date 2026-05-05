@@ -12,9 +12,9 @@ from pathlib import Path
 
 import geopandas as gpd
 import obstore as obs
-from obstore.store import GCSStore, S3Store
 from shapely.geometry import box
 
+from aef_loader._cloud import default_cache_dir, make_gcs_store, make_s3_store
 from aef_loader.constants import (
     GCS_BUCKET,
     GCS_INDEX_BLOB,
@@ -75,7 +75,7 @@ class AEFIndex:
         """
         self.source = source
         self.gcp_project = gcp_project
-        self.cache_dir = cache_dir or Path("/tmp")
+        self.cache_dir = cache_dir or default_cache_dir()
         self._gdf: gpd.GeoDataFrame | None = None
         self._index_path: Path | None = None
 
@@ -127,27 +127,12 @@ class AEFIndex:
             logger.info(
                 f"Downloading AEF index from s3://{self._bucket}/{self._index_blob}"
             )
-            store = S3Store(
-                bucket=self._bucket,
-                region=SOURCE_COOP_REGION,
-                skip_signature=True,  # Public bucket, no auth needed
-            )
+            store = make_s3_store(self._bucket, SOURCE_COOP_REGION)
         else:
-            # GCS - requires project for requester-pays
-            if not self.gcp_project:
-                raise ValueError(
-                    "gcp_project is required for downloading from GCS requester-pays bucket"
-                )
-
             logger.info(
                 f"Downloading AEF index from gs://{self._bucket}/{self._index_blob}"
             )
-            store = GCSStore(
-                bucket=self._bucket,
-                client_options={
-                    "default_headers": {"x-goog-user-project": self.gcp_project}
-                },
-            )
+            store = make_gcs_store(self._bucket, self.gcp_project)
 
         local_path.parent.mkdir(parents=True, exist_ok=True)
 

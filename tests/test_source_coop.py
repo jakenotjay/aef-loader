@@ -1,15 +1,15 @@
 """Tests for Source Cooperative (S3) support in aef_loader."""
 
 import pytest
+from aef_loader._cloud import (
+    detect_protocol as _detect_protocol,
+    parse_cloud_path as _parse_cloud_path,
+    parse_s3_path as _parse_s3_path,
+)
 from aef_loader.constants import (
     DataSource,
 )
 from aef_loader.index import AEFIndex
-from aef_loader.reader import (
-    _detect_protocol,
-    _parse_cloud_path,
-    _parse_s3_path,
-)
 
 
 class TestPathParsing:

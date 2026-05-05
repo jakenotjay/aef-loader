@@ -90,22 +90,24 @@ def make_s3_store(bucket: str, region: str, skip_signature: bool = True) -> S3St
 def _affine_from_pixel_scale_and_tiepoint(
     pixel_scale: tuple[float, float, float],
     tiepoint: tuple[float, float, float, float, float, float],
-    flip_y: bool = False,
 ) -> Affine:
     """Build an affine from ``ModelPixelScaleTag`` + ``ModelTiepointTag``.
+
+    Per the GeoTIFF spec (OGC 19-008r4 §7.2.5), ``ModelPixelScaleY`` is stored
+    as a positive magnitude and the y-step in the affine is implicitly
+    *negative* — i.e. images using these tags are north-up with pixel (0,0)
+    at the NW corner. Datasets that are genuinely bottom-up (e.g. AEF) use
+    ``ModelTransformationTag`` instead, which carries the y-step sign
+    explicitly and is handled by :func:`_affine_from_model_transform`.
 
     Args:
         pixel_scale: ``(sx, sy, sz)`` from the GeoTIFF tag (always positive).
         tiepoint: ``(i, j, k, x, y, z)`` from the GeoTIFF tag — pixel ``(i,j)``
             maps to world ``(x, y)``.
-        flip_y: When ``True``, negate the y-step (standard north-up images
-            where pixel (0,0) is the NW corner). When ``False`` (the default,
-            preserving AEF's existing behaviour), use the raw positive y-step
-            from the tag — appropriate for AEF's bottom-up storage.
     """
     sx, sy, _ = pixel_scale
     x, y = tiepoint[3], tiepoint[4]
-    return Affine(sx, 0, x, 0, -sy if flip_y else sy, y)
+    return Affine(sx, 0, x, 0, -sy, y)
 
 
 def _affine_from_model_transform(model_transform: tuple[float, ...]) -> Affine:
@@ -120,13 +122,16 @@ def _affine_from_model_transform(model_transform: tuple[float, ...]) -> Affine:
     )
 
 
-def get_geobox_from_dataset(ds: xr.Dataset, crs: str, flip_y: bool = False) -> GeoBox:
+def get_geobox_from_dataset(ds: xr.Dataset, crs: str) -> GeoBox:
     """Extract a GeoBox from a dataset's GeoTIFF tag attrs.
 
-    Looks at the data variables for ``model_transformation`` (preferred) or
-    ``model_pixel_scale`` + ``model_tiepoint``. ``flip_y`` is only consulted
-    on the pixel-scale path; ``model_transformation`` already encodes the
-    correct sign.
+    Looks at the data variables for ``model_transformation`` (preferred — the
+    matrix is fully explicit, including the y-step sign) or the
+    ``model_pixel_scale`` + ``model_tiepoint`` pair (interpreted per the
+    GeoTIFF spec, which implies a negative y-step / north-up orientation).
+    No per-dataset configuration is needed: AEF carries
+    ``ModelTransformationTag`` with a positive ``e`` element (bottom-up),
+    while FDP uses ``ModelPixelScaleTag`` and is north-up under the spec.
     """
     from odc.geo.geobox import GeoBox
 
@@ -148,7 +153,6 @@ def get_geobox_from_dataset(ds: xr.Dataset, crs: str, flip_y: bool = False) -> G
         affine = _affine_from_pixel_scale_and_tiepoint(
             attrs["model_pixel_scale"],
             attrs.get("model_tiepoint", [0, 0, 0, 0, 0, 0]),
-            flip_y=flip_y,
         )
 
     return GeoBox(shape=(height, width), affine=affine, crs=crs)

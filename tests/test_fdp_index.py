@@ -165,8 +165,34 @@ class TestFDPIndex:
         assert len(tiles) == 2
 
     @pytest.mark.unit
-    def test_default_cache_dir(self):
+    def test_default_cache_dir_without_xdg(self, monkeypatch):
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
         index = FDPIndex(release="2025b")
-        assert index.cache_dir == Path.home() / ".cache" / "aef-loader" or str(
-            index.cache_dir
-        ).endswith("aef-loader")
+        assert index.cache_dir == Path.home() / ".cache" / "aef-loader"
+
+    @pytest.mark.unit
+    def test_default_cache_dir_honours_xdg(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        index = FDPIndex(release="2025b")
+        assert index.cache_dir == tmp_path / "aef-loader"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_query_limit_zero_returns_empty(self, tmp_path, mock_fdp_gdf):
+        cache_file = tmp_path / "fdp_index_2025b.parquet"
+        mock_fdp_gdf.to_parquet(cache_file)
+
+        index = FDPIndex(release="2025b", cache_dir=tmp_path)
+        tiles = await index.query(limit=0)
+        assert tiles == []
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_query_accepts_string_year(self, tmp_path, mock_fdp_gdf):
+        cache_file = tmp_path / "fdp_index_2025b.parquet"
+        mock_fdp_gdf.to_parquet(cache_file)
+
+        index = FDPIndex(release="2025b", cache_dir=tmp_path)
+        tiles = await index.query(years="2024", commodities=["coffee"])
+        assert {t.year for t in tiles} == {2024}
+        assert len(tiles) == 3

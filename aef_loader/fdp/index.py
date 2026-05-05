@@ -210,6 +210,7 @@ class FDPIndex:
                 if not m:
                     if obj["size"] > 0:
                         skipped += 1
+                        logger.debug(f"{prefix}: skipping non-tile file {fname!r}")
                     continue
                 lng, lat = int(m.group(1)), int(m.group(2))
                 rows.append(
@@ -257,9 +258,18 @@ class FDPIndex:
         return self._gdf
 
     @staticmethod
-    def _year_range(years: int | DateRange) -> tuple[int, int]:
+    def _year_range(years: int | str | DateRange) -> tuple[int, int]:
+        """Normalise a year scalar or range into ``(start, end)`` ints.
+
+        Accepts ``2024``, ``"2024"``, ``"2024-06-01"``, ``(2020, 2024)``, or
+        any combination of int/string for the tuple form (matching
+        :class:`aef_loader.types.DateRange`).
+        """
         if isinstance(years, int):
             return years, years
+        if isinstance(years, str):
+            y = int(years[:4])
+            return y, y
         start, end = years
         if isinstance(start, str):
             start = int(start[:4])
@@ -270,7 +280,7 @@ class FDPIndex:
     async def query(
         self,
         bbox: BoundingBox | None = None,
-        years: int | DateRange | None = None,
+        years: int | str | DateRange | None = None,
         commodities: Iterable[Commodity] | None = None,
         limit: int | None = None,
     ) -> list[FDPTileInfo]:
@@ -305,7 +315,7 @@ class FDPIndex:
             gdf = gdf[(gdf["year"] >= start) & (gdf["year"] <= end)]
             logger.info(f"After year filter: {len(gdf)} tiles")
 
-        if limit:
+        if limit is not None:
             gdf = gdf.head(limit)
 
         if len(gdf) == 0:

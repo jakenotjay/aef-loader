@@ -26,6 +26,7 @@ from xarray import DataTree
 
 from aef_loader._cloud import (
     PathProtocol,
+    get_geobox_from_dataset,
     make_gcs_store,
     parse_cloud_path,
 )
@@ -43,12 +44,16 @@ _FDP_CRS = "EPSG:4326"
 def _geobox_from_tile(tile: FDPTileInfo, height: int, width: int) -> GeoBox:
     """Build a north-up GeoBox from the tile's bbox and the IFD's pixel grid.
 
-    We don't read the GeoTIFF tags here because virtual-tiff only attaches
-    ``model_pixel_scale``/``model_tiepoint`` to IFD 0; reading at any
-    overview level (IFD > 0) leaves the dataset without geo-attrs. Since
-    each FDP tile covers exactly its filename's 1°×1° EPSG:4326 box and
-    the IFD's pixel dimensions are in the dataset, the geobox is derivable
-    from those two facts alone, at any IFD.
+    Fallback for overview IFDs only — virtual-tiff attaches the GeoTIFF
+    tags (``model_pixel_scale`` / ``model_tiepoint``) to IFD 0 but not to
+    overviews, so :func:`get_geobox_from_dataset` can't extract a geobox
+    at IFD > 0. Each FDP tile covers exactly its filename's 1°×1°
+    EPSG:4326 box, so the geobox is fully derivable from that bbox plus
+    the IFD's pixel dimensions.
+
+    Prefer the tag-based geobox via :func:`get_geobox_from_dataset` when
+    the attrs are present — it carries the writer's sub-pixel tiepoint
+    precision and matches what GDAL/rasterio would report.
     """
     minx, miny, maxx, maxy = tile.bbox
     pixel_x = (maxx - minx) / width
@@ -203,7 +208,14 @@ class FDPReader:
         src_var = next(iter(ds.data_vars))
         ds = ds.rename({src_var: "probability"})
 
-        geobox = _geobox_from_tile(tile, height=ds.sizes["y"], width=ds.sizes["x"])
+        # Prefer the tag-based geobox at IFD 0 (sub-pixel-precision tiepoint
+        # from the writer). Overviews don't carry the tags so fall back to
+        # deriving from the tile bbox + the IFD's pixel grid.
+        attrs = ds["probability"].attrs
+        if "model_pixel_scale" in attrs or "model_transformation" in attrs:
+            geobox = get_geobox_from_dataset(ds, _FDP_CRS)
+        else:
+            geobox = _geobox_from_tile(tile, height=ds.sizes["y"], width=ds.sizes["x"])
         # Force x/y naming — xr_coords defaults to longitude/latitude for
         # geographic CRSs like EPSG:4326, but virtual-tiff produces a dataset
         # whose spatial dims are already x/y.

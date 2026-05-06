@@ -11,7 +11,7 @@ For combining data across zones, use reproject_datatree() from the utils module.
 """
 
 from aef_loader.constants import DataSource
-from aef_loader.fdp import FDPIndex
+from aef_loader.fdp import FDPIndex, FDPReader
 from aef_loader.index import AEFIndex
 from aef_loader.reader import VirtualTiffReader
 from aef_loader.types import COMMODITIES, AEFTileInfo, Commodity, FDPTileInfo
@@ -29,6 +29,7 @@ __all__ = [
     # Core classes
     "AEFIndex",
     "FDPIndex",
+    "FDPReader",
     "VirtualTiffReader",
     # Types
     "AEFTileInfo",

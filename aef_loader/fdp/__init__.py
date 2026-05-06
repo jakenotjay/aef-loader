@@ -7,5 +7,6 @@ listing the GCS bucket since the FDP project does not publish a parquet index.
 """
 
 from aef_loader.fdp.index import FDPIndex
+from aef_loader.fdp.reader import FDPReader
 
-__all__ = ["FDPIndex"]
+__all__ = ["FDPIndex", "FDPReader"]

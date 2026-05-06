@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Literal
 import xarray as xr
 from odc.geo.xr import assign_crs, xr_coords
 from virtual_tiff import VirtualTIFF
-from virtualizarr.registry import ObjectStoreRegistry
+from obspec_utils.registry import ObjectStoreRegistry
 from xarray import DataTree
 
 from aef_loader._cloud import (

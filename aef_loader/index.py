@@ -170,25 +170,29 @@ class AEFIndex:
         logger.info(f"Loaded {len(self._gdf)} tiles from AEF index")
         return self._gdf
 
-    def _get_start_and_end_year(self, years: int | DateRange) -> tuple[int, int]:
+    def _get_start_and_end_year(self, years: int | str | DateRange) -> tuple[int, int]:
+        """Normalise a year scalar or range into ``(start, end)`` ints.
+
+        Accepts ``2024``, ``"2024"``, ``"2024-06-01"``, ``(2020, 2024)``, or
+        any combination of int/string for the tuple form (matching
+        :class:`aef_loader.types.DateRange`).
+        """
         if isinstance(years, int):
-            start_year = end_year = years
-            return start_year, end_year
-
+            return years, years
+        if isinstance(years, str):
+            y = int(years[:4])
+            return y, y
         start_year, end_year = years
-
-        # Handle string dates
         if isinstance(start_year, str):
             start_year = int(start_year[:4])
         if isinstance(end_year, str):
             end_year = int(end_year[:4])
-
         return start_year, end_year
 
     async def query(
         self,
         bbox: BoundingBox | None = None,
-        years: int | DateRange | None = None,
+        years: int | str | DateRange | None = None,
         limit: int | None = None,
     ) -> list[AEFTileInfo]:
         """
@@ -221,7 +225,7 @@ class AEFIndex:
             gdf = gdf[(gdf["year"] >= start_year) & (gdf["year"] <= end_year)]
             logger.info(f"After year filter: {len(gdf)} tiles")
 
-        if limit:
+        if limit is not None:
             gdf = gdf.head(limit)
 
         if len(gdf) == 0:

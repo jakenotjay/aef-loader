@@ -155,6 +155,33 @@ class TestAEFIndex:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_query_limit_zero_returns_empty(self, tmp_path, mock_gdf):
+        """limit=0 should return an empty list, not all results."""
+        index_path = tmp_path / "aef_index_gcs.parquet"
+        mock_gdf.to_parquet(index_path)
+
+        index = AEFIndex(source=DataSource.GCS, cache_dir=tmp_path)
+        index.load()
+
+        tiles = await index.query(limit=0)
+        assert tiles == []
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_query_accepts_string_year(self, tmp_path, mock_gdf):
+        """A bare string year should be parsed as a single-year filter."""
+        index_path = tmp_path / "aef_index_gcs.parquet"
+        mock_gdf.to_parquet(index_path)
+
+        index = AEFIndex(source=DataSource.GCS, cache_dir=tmp_path)
+        index.load()
+
+        tiles = await index.query(years="2023")
+        assert {t.year for t in tiles} == {2023}
+        assert len(tiles) == 2
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_query_creates_tile_info(self, tmp_path, mock_gdf):
         """Test that query creates proper AEFTileInfo objects."""
         index_path = tmp_path / "aef_index_gcs.parquet"
@@ -171,3 +198,23 @@ class TestAEFIndex:
         assert tile.year == 2022
         assert tile.crs_epsg == 32610
         assert tile.source == DataSource.GCS
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "years,expected",
+        [
+            (2024, (2024, 2024)),
+            ("2024", (2024, 2024)),
+            ("2024-06-01", (2024, 2024)),
+            ((2020, 2024), (2020, 2024)),
+            (("2020", "2024"), (2020, 2024)),
+            ((2020, "2024-12-31"), (2020, 2024)),
+            # Pin current pass-through behaviour for inverted ranges. Callers
+            # currently get an empty result silently — we can tighten the
+            # contract (raise / clamp) later if it becomes a footgun.
+            ((2024, 2020), (2024, 2020)),
+        ],
+    )
+    def test_get_start_and_end_year_normalises_inputs(self, years, expected):
+        index = AEFIndex(source=DataSource.GCS, cache_dir=Path("/nonexistent"))
+        assert index._get_start_and_end_year(years) == expected

@@ -17,14 +17,15 @@ from typing import Literal
 
 import numpy as np
 import xarray as xr
+from affine import Affine
+from obspec_utils.registry import ObjectStoreRegistry
+from odc.geo.geobox import GeoBox
 from odc.geo.xr import assign_crs, xr_coords
 from virtual_tiff import VirtualTIFF
-from obspec_utils.registry import ObjectStoreRegistry
 from xarray import DataTree
 
 from aef_loader._cloud import (
     PathProtocol,
-    get_geobox_from_dataset,
     make_gcs_store,
     parse_cloud_path,
 )
@@ -34,9 +35,26 @@ from aef_loader.utils import set_aef_nodata
 logger = logging.getLogger(__name__)
 
 # FDP tiles are always EPSG:4326. Hardcoded (rather than read from
-# tile.crs_epsg) so the orientation expectations of get_geobox_from_dataset
-# stay obvious at the call site.
+# tile.crs_epsg) so the orientation expectations of the geobox stay
+# obvious at the call site.
 _FDP_CRS = "EPSG:4326"
+
+
+def _geobox_from_tile(tile: FDPTileInfo, height: int, width: int) -> GeoBox:
+    """Build a north-up GeoBox from the tile's bbox and the IFD's pixel grid.
+
+    We don't read the GeoTIFF tags here because virtual-tiff only attaches
+    ``model_pixel_scale``/``model_tiepoint`` to IFD 0; reading at any
+    overview level (IFD > 0) leaves the dataset without geo-attrs. Since
+    each FDP tile covers exactly its filename's 1°×1° EPSG:4326 box and
+    the IFD's pixel dimensions are in the dataset, the geobox is derivable
+    from those two facts alone, at any IFD.
+    """
+    minx, miny, maxx, maxy = tile.bbox
+    pixel_x = (maxx - minx) / width
+    pixel_y = (maxy - miny) / height  # positive magnitude
+    affine = Affine(pixel_x, 0, minx, 0, -pixel_y, maxy)
+    return GeoBox(shape=(height, width), affine=affine, crs=_FDP_CRS)
 
 
 class FDPReader:
@@ -185,7 +203,7 @@ class FDPReader:
         src_var = next(iter(ds.data_vars))
         ds = ds.rename({src_var: "probability"})
 
-        geobox = get_geobox_from_dataset(ds, _FDP_CRS)
+        geobox = _geobox_from_tile(tile, height=ds.sizes["y"], width=ds.sizes["x"])
         # Force x/y naming — xr_coords defaults to longitude/latitude for
         # geographic CRSs like EPSG:4326, but virtual-tiff produces a dataset
         # whose spatial dims are already x/y.

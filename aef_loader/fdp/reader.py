@@ -27,6 +27,7 @@ from xarray import DataTree
 from aef_loader._cloud import (
     PathProtocol,
     get_geobox_from_dataset,
+    has_geo_attrs,
     make_gcs_store,
     parse_cloud_path,
 )
@@ -210,9 +211,10 @@ class FDPReader:
 
         # Prefer the tag-based geobox at IFD 0 (sub-pixel-precision tiepoint
         # from the writer). Overviews don't carry the tags so fall back to
-        # deriving from the tile bbox + the IFD's pixel grid.
-        attrs = ds["probability"].attrs
-        if "model_pixel_scale" in attrs or "model_transformation" in attrs:
+        # deriving from the tile bbox + the IFD's pixel grid. has_geo_attrs
+        # mirrors the iteration get_geobox_from_dataset uses internally so
+        # the two predicates can't drift.
+        if has_geo_attrs(ds):
             geobox = get_geobox_from_dataset(ds, _FDP_CRS)
         else:
             geobox = _geobox_from_tile(tile, height=ds.sizes["y"], width=ds.sizes["x"])

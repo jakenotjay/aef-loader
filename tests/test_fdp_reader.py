@@ -166,6 +166,34 @@ class TestFDPReader:
 # ---------------------------------------------------------------------------
 
 
+class TestGeoboxFromTile:
+    """Direct coverage for the overview-IFD fallback geobox derivation.
+
+    Exercised end-to-end at IFD 2 by the slow integration test, but a fast
+    unit-level guard means a regression is caught without needing GCS.
+    """
+
+    @pytest.mark.unit
+    def test_geobox_north_up_with_correct_pixel_size_and_origin(self):
+        from aef_loader.fdp.reader import _geobox_from_tile
+
+        tile = _fake_tile_info(commodity="coffee", year=2024, lng=9, lat=5)
+        geobox = _geobox_from_tile(tile, height=1000, width=2000)
+
+        # 1°×1° tile, height=1000 → 0.001°/px in y, width=2000 → 0.0005°/px in x.
+        assert geobox.affine.a == pytest.approx(0.0005)
+        assert geobox.affine.e == pytest.approx(-0.001)  # north-up
+        # NW corner at (lng, lat+1) per the SW-corner filename convention.
+        assert geobox.affine.c == pytest.approx(9.0)
+        assert geobox.affine.f == pytest.approx(6.0)
+        assert str(geobox.crs) == "EPSG:4326"
+        bbox = geobox.boundingbox
+        assert bbox.left == pytest.approx(9.0)
+        assert bbox.right == pytest.approx(10.0)
+        assert bbox.bottom == pytest.approx(5.0)
+        assert bbox.top == pytest.approx(6.0)
+
+
 class TestOpenTile:
     @pytest.mark.unit
     @pytest.mark.asyncio

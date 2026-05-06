@@ -122,6 +122,22 @@ def _affine_from_model_transform(model_transform: tuple[float, ...]) -> Affine:
     )
 
 
+def has_geo_attrs(ds: xr.Dataset) -> bool:
+    """Return True if any data variable carries the GeoTIFF tag attrs.
+
+    ``model_pixel_scale`` (with optional ``model_tiepoint``) or
+    ``model_transformation`` is enough — :func:`get_geobox_from_dataset`
+    accepts either. Useful for callers that have a per-tile fallback
+    (e.g. derive the geobox from a known bbox at overview IFDs where
+    virtual-tiff drops the tags) and need to choose a code path before
+    calling :func:`get_geobox_from_dataset`.
+    """
+    return any(
+        "model_pixel_scale" in ds[var].attrs or "model_transformation" in ds[var].attrs
+        for var in ds.data_vars
+    )
+
+
 def get_geobox_from_dataset(ds: xr.Dataset, crs: str) -> GeoBox:
     """Extract a GeoBox from a dataset's GeoTIFF tag attrs.
 

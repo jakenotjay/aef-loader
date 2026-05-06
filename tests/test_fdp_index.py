@@ -86,6 +86,12 @@ class TestFDPIndex:
                             "path": "forestdatapartnership/2025b/coffee/2024",
                             "size": 0,
                         },  # directory marker
+                        # Non-tile file: should be silently skipped (warning
+                        # logged) and excluded from the resulting parquet.
+                        {
+                            "path": "forestdatapartnership/2025b/coffee/2024/README.txt",
+                            "size": 42,
+                        },
                     ]
                 ]
             )
@@ -99,6 +105,8 @@ class TestFDPIndex:
         assert len(gdf) == 2
         assert set(gdf["commodity"]) == {"coffee"}
         assert set(zip(gdf["lng"], gdf["lat"])) == {(9, 5), (10, 5)}
+        # Non-matching file is excluded.
+        assert not gdf["path"].str.endswith("README.txt").any()
 
     @pytest.mark.unit
     def test_load_not_found_raises(self, tmp_path):
@@ -196,3 +204,78 @@ class TestFDPIndex:
         tiles = await index.query(years="2024", commodities=["coffee"])
         assert {t.year for t in tiles} == {2024}
         assert len(tiles) == 3
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_build_collects_rows_across_multiple_batches(self, tmp_path):
+        """obs.list yields rows in batches; the index must concatenate them."""
+        with (
+            patch(
+                "aef_loader.fdp.index.obs.list_with_delimiter_async",
+                new_callable=AsyncMock,
+            ) as mock_delim,
+            patch("aef_loader.fdp.index.obs.list") as mock_list,
+        ):
+            mock_delim.side_effect = [
+                {
+                    "common_prefixes": ["forestdatapartnership/2025b/coffee"],
+                    "objects": [],
+                },
+                {
+                    "common_prefixes": ["forestdatapartnership/2025b/coffee/2024"],
+                    "objects": [],
+                },
+            ]
+
+            class _AsyncIter:
+                def __init__(self, batches):
+                    self._batches = batches
+
+                def __aiter__(self):
+                    return self._iter()
+
+                async def _iter(self):
+                    for b in self._batches:
+                        yield b
+
+            mock_list.return_value = _AsyncIter(
+                [
+                    [
+                        {
+                            "path": "forestdatapartnership/2025b/coffee/2024/lng_9_lat_5.tif",
+                            "size": 100,
+                        }
+                    ],
+                    [
+                        {
+                            "path": "forestdatapartnership/2025b/coffee/2024/lng_10_lat_5.tif",
+                            "size": 100,
+                        }
+                    ],
+                ]
+            )
+
+            index = FDPIndex(release="2025b", gcp_project="test", cache_dir=tmp_path)
+            await index.build(force=True)
+
+        gdf = index.load()
+        assert set(zip(gdf["lng"], gdf["lat"])) == {(9, 5), (10, 5)}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "years,expected",
+        [
+            (2024, (2024, 2024)),
+            ("2024", (2024, 2024)),
+            ("2024-06-01", (2024, 2024)),
+            ((2020, 2024), (2020, 2024)),
+            (("2020", "2024"), (2020, 2024)),
+            ((2020, "2024-12-31"), (2020, 2024)),
+            # Pin current pass-through behaviour for inverted ranges. Callers
+            # currently get an empty result silently — we can tighten the
+            # contract (raise / clamp) later if it becomes a footgun.
+            ((2024, 2020), (2024, 2020)),
+        ],
+    )
+    def test_year_range_normalises_inputs(self, years, expected):
+        assert FDPIndex._year_range(years) == expected

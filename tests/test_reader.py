@@ -54,8 +54,11 @@ class TestVirtualTiffReader:
         mock_store = MagicMock()
         reader._stores["gs://my-bucket"] = mock_store
 
-        with patch("obstore.store.GCSStore") as mock_gcs:
+        # Patch the symbol the reader actually calls. Patching
+        # obstore.store.GCSStore would be vacuous here because the AEF reader
+        # delegates through aef_loader.reader.make_gcs_store after the _cloud
+        # refactor.
+        with patch("aef_loader.reader.make_gcs_store") as mock_make:
             store = reader._get_store("gs", "my-bucket")
-
-            mock_gcs.assert_not_called()
-            assert store == mock_store
+            mock_make.assert_not_called()
+        assert store is mock_store

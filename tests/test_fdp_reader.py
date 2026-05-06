@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import rasterio
 import xarray as xr
 from aef_loader.fdp.reader import FDPReader
 from aef_loader.types import FDPTileInfo
+from rasterio.transform import from_origin
 from xarray import DataTree
 
 
@@ -69,6 +72,46 @@ def _fake_tile_info(
     )
 
 
+def _write_synthetic_cog(
+    path: Path,
+    *,
+    west: float,
+    north: float,
+    n_x: int = 64,
+    n_y: int = 64,
+    res: float = 0.0001,
+    fill: Literal["gradient"] | float = "gradient",
+) -> None:
+    """Write a small COG-shaped EPSG:4326 GeoTIFF for unit-test scenarios.
+
+    Tiled (32x32 blocks) and LZW-compressed to give it COG-ish structure.
+    The single band is named ``probability`` and the NW-corner origin is
+    ``(west, north)`` per the GeoTIFF ``ModelPixelScaleTag`` convention.
+    """
+    transform = from_origin(west=west, north=north, xsize=res, ysize=res)
+    if fill == "gradient":
+        data = np.linspace(0, 1, n_x * n_y, dtype=np.float32).reshape(n_y, n_x)
+    else:
+        data = np.full((n_y, n_x), float(fill), dtype=np.float32)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=n_y,
+        width=n_x,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        tiled=True,
+        blockxsize=32,
+        blockysize=32,
+        compress="lzw",
+    ) as dst:
+        dst.write(data, 1)
+        dst.set_band_description(1, "probability")
+
+
 # ---------------------------------------------------------------------------
 # Context manager + store wiring
 # ---------------------------------------------------------------------------
@@ -114,6 +157,112 @@ class TestFDPReader:
         reader = FDPReader(gcp_project="p")
         with pytest.raises(ValueError, match="only supports gs"):
             reader._get_store("s3", "my-bucket")
+
+
+# ---------------------------------------------------------------------------
+# _open_tile — exercises the full virtual-tiff → xarray → geobox pipeline
+# against a synthetic on-disk COG, using obstore's LocalStore so no GCS is
+# touched. Pins the y-orientation fix end-to-end.
+# ---------------------------------------------------------------------------
+
+
+class TestOpenTile:
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_open_tile_with_synthetic_cog(self, tmp_path, monkeypatch):
+        from obstore.store import LocalStore
+        from virtual_tiff import VirtualTIFF
+
+        cog_path = tmp_path / "test_tile.tif"
+        _write_synthetic_cog(cog_path, west=9.0, north=6.0)
+
+        tile = FDPTileInfo(
+            id="coffee_2024_lng_9_lat_5",
+            path="gs://fake-bucket/test_tile.tif",
+            year=2024,
+            bbox=(9.0, 5.9936, 9.0064, 6.0),
+            commodity="coffee",
+            release="2025b",
+        )
+
+        local_store = LocalStore(prefix=str(tmp_path))
+
+        async with FDPReader(gcp_project="p") as reader:
+            # Force the reader to use the on-disk LocalStore regardless of
+            # the gs:// path — everything else (parser, open_zarr, geobox,
+            # set_aef_nodata) runs for real.
+            monkeypatch.setattr(
+                reader, "_get_store", lambda protocol, bucket: local_store
+            )
+
+            parser = VirtualTIFF(ifd=0)
+            ds = await reader._open_tile(tile, parser=parser, chunks=None)
+
+            assert set(ds.dims) == {"time", "y", "x"}
+            assert list(ds.data_vars) == ["probability"]
+            assert ds.sizes["time"] == 1
+            assert ds.sizes["y"] == 64 and ds.sizes["x"] == 64
+
+            assert np.isnan(ds["probability"].attrs["_FillValue"])
+            assert np.isnan(ds["probability"].attrs["nodata"])
+
+            xs = ds.coords["x"].values
+            ys = ds.coords["y"].values
+            assert xs.min() >= 9.0 - 1e-6
+            assert xs.max() <= 9.0064 + 1e-6
+            assert ys.min() >= 5.9936 - 1e-6
+            assert ys.max() <= 6.0 + 1e-6
+
+            # Load-bearing: pins north-up orientation through virtual-tiff
+            # and get_geobox_from_dataset.
+            assert ys[0] > ys[-1]
+
+            assert ds.attrs["_tile_id"] == tile.id
+            assert ds.attrs["commodity"] == tile.commodity
+
+            # Round-trip the time coord through _combine_opened_datasets to
+            # cover both the expand_dims(time=[tile.as_datetime]) site and
+            # the np.datetime64 → datetime.fromtimestamp path.
+            combined = FDPReader._combine_opened_datasets([ds])
+            combined_time = combined.coords["time"].values[0]
+            expected_time = np.datetime64(tile.as_datetime)
+            assert combined_time == expected_time
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_open_tile_rejects_multi_var(self, monkeypatch):
+        """If virtual-tiff yields >1 data var we surface a ValueError rather
+        than silently picking [0]. Mocked rather than data-driven because
+        virtual-tiff collapses multi-band TIFFs to a single var."""
+        fake_ds = xr.Dataset(
+            {
+                "a": (("y", "x"), np.zeros((4, 4), dtype=np.float32)),
+                "b": (("y", "x"), np.zeros((4, 4), dtype=np.float32)),
+            }
+        )
+
+        # Short-circuit the parser — we don't need a real file because we're
+        # also short-circuiting xr.open_zarr below.
+        monkeypatch.setattr(
+            "aef_loader.fdp.reader.VirtualTIFF.__call__",
+            lambda self, **kwargs: object(),
+        )
+        monkeypatch.setattr(
+            "aef_loader.fdp.reader.xr.open_zarr",
+            lambda *args, **kwargs: fake_ds,
+        )
+
+        tile = _fake_tile_info()
+        async with FDPReader(gcp_project="p") as reader:
+            # Bypass GCS — _get_registry just needs to return *something*
+            # the parser will accept; the parser is mocked above.
+            monkeypatch.setattr(reader, "_get_registry", lambda *a, **k: None)
+
+            from virtual_tiff import VirtualTIFF
+
+            parser = VirtualTIFF(ifd=0)
+            with pytest.raises(ValueError, match="expected exactly one data variable"):
+                await reader._open_tile(tile, parser=parser, chunks=None)
 
 
 # ---------------------------------------------------------------------------

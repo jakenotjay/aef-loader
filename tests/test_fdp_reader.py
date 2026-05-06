@@ -113,7 +113,7 @@ class TestFDPReader:
     def test_get_store_rejects_non_gs_protocol(self):
         reader = FDPReader(gcp_project="p")
         with pytest.raises(ValueError, match="only supports gs"):
-            reader._get_store("s3", "my-bucket")  # type: ignore[arg-type]
+            reader._get_store("s3", "my-bucket")
 
 
 # ---------------------------------------------------------------------------

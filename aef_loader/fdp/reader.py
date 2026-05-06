@@ -224,6 +224,8 @@ class FDPReader:
             if len(time_dsets) == 1:
                 spatial = time_dsets[0]
             else:
+                # combine_by_coords is typed as Dataset | DataArray; we only
+                # ever pass Datasets in, so the result is a Dataset.
                 spatial = xr.combine_by_coords(
                     time_dsets,
                     coords="minimal",
@@ -231,6 +233,7 @@ class FDPReader:
                     combine_attrs="drop_conflicts",
                     join="outer",
                 )
+                assert isinstance(spatial, xr.Dataset)
             time_slices.append(spatial)
 
         if len(time_slices) == 1:

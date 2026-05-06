@@ -489,3 +489,51 @@ class TestFDPReaderIntegration:
         if np.isfinite(sample).any():
             assert float(np.nanmin(sample)) >= 0.0
             assert float(np.nanmax(sample)) <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_open_at_overview_ifd(self, gcp_project):
+        """Pin the IFD>0 path: virtual-tiff drops the GeoTIFF tags on overview
+        IFDs, so the reader must fall back to deriving the geobox from the
+        tile bbox + the IFD's pixel grid. Earlier slipped past CI because the
+        only integration coverage was IFD 0."""
+        from aef_loader.fdp.index import FDPIndex
+
+        cache_dir = Path.home() / ".cache" / "aef-loader"
+        index = FDPIndex(release="2025b", gcp_project=gcp_project, cache_dir=cache_dir)
+        if not (cache_dir / "fdp_index_2025b.parquet").exists():
+            await index.build()
+        index.load()
+
+        tiles = await index.query(
+            bbox=(9.1, 5.1, 9.9, 5.9),
+            years=2024,
+            commodities=["coffee"],
+        )
+        assert len(tiles) == 1
+
+        # IFD 2 is ~quarter resolution (2784x2784 per tile vs 11133x11133 at
+        # IFD 0). Pick this rather than IFD 1 to give us clear shape evidence
+        # that we're actually reading an overview, not the base.
+        async with FDPReader(gcp_project=gcp_project) as reader:
+            tree = await reader.open(tiles, ifd=2)
+
+        ds = tree["/coffee"].ds
+        # Overview shape, not base: ~quarter of 11133.
+        assert 2000 < ds.sizes["x"] < 4000
+        assert 2000 < ds.sizes["y"] < 4000
+        # Coords still cover the tile's 1°×1° bbox and remain north-up.
+        xs = ds.coords["x"].values
+        ys = ds.coords["y"].values
+        assert xs.min() >= 9.0 - 1e-3 and xs.max() <= 10.0 + 1e-3
+        assert ys.min() >= 5.0 - 1e-3 and ys.max() <= 6.0 + 1e-3
+        assert ys[0] > ys[-1]
+
+        sample = (
+            ds["probability"]
+            .isel(time=0, y=slice(0, 256), x=slice(0, 256))
+            .compute()
+            .values
+        )
+        if np.isfinite(sample).any():
+            assert float(np.nanmin(sample)) >= 0.0
+            assert float(np.nanmax(sample)) <= 1.0

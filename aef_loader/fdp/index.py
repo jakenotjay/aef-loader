@@ -208,6 +208,9 @@ class FDPIndex:
                 fname = key.rsplit("/", 1)[-1]
                 m = _TILE_FILENAME_RE.match(fname)
                 if not m:
+                    # size==0 is the GCS pseudo-directory placeholder for the
+                    # leaf prefix itself; skip silently. Real off-pattern
+                    # files (e.g. README.txt) get logged and counted.
                     if obj["size"] > 0:
                         skipped += 1
                         logger.debug(f"{prefix}: skipping non-tile file {fname!r}")

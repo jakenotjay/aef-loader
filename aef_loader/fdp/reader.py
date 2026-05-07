@@ -220,9 +220,10 @@ class FDPReader:
             geobox = _geobox_from_tile(tile, height=ds.sizes["y"], width=ds.sizes["x"])
         # Force x/y naming — xr_coords defaults to longitude/latitude for
         # geographic CRSs like EPSG:4326, but virtual-tiff produces a dataset
-        # whose spatial dims are already x/y.
-        coords = xr_coords(geobox, dims=("y", "x"))
-        ds = ds.assign_coords(x=coords["x"].values, y=coords["y"].values)
+        # whose spatial dims are already x/y. Pass the dict straight through
+        # to preserve the coord DataArrays' attrs (axis, standard_name, the
+        # spatial_ref CRS coord) rather than stripping to bare .values.
+        ds = ds.assign_coords(xr_coords(geobox, dims=("y", "x")))
         ds = ds.expand_dims(time=[tile.as_datetime])
 
         ds["probability"] = set_aef_nodata(ds["probability"], nodata=np.nan)

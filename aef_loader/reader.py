@@ -241,10 +241,12 @@ class VirtualTiffReader:
             # This correctly handles bottom-up images (positive y scale)
             crs = f"EPSG:{tile.crs_epsg}"
             geobox = get_geobox_from_dataset(ds, crs)
-            coords = xr_coords(geobox)
 
-            # Assign spatial coordinates from the actual TIFF affine
-            ds = ds.assign_coords(x=coords["x"].values, y=coords["y"].values)
+            # Assign spatial coordinates from the actual TIFF affine. Pass
+            # the xr_coords dict straight through to preserve the coord
+            # DataArrays' attrs (axis, standard_name, the spatial_ref CRS
+            # coord) rather than stripping to bare .values.
+            ds = ds.assign_coords(xr_coords(geobox))
 
             # Expand time as a dimension
             ds = ds.expand_dims(time=[tile.as_datetime])

@@ -12,9 +12,15 @@ from pathlib import Path
 
 import geopandas as gpd
 import obstore as obs
-from obstore.store import GCSStore, S3Store
+from pyproj import CRS
 from shapely.geometry import box
 
+from aef_loader._cloud import (
+    default_cache_dir,
+    make_gcs_store,
+    make_s3_store,
+    normalize_year_range,
+)
 from aef_loader.constants import (
     GCS_BUCKET,
     GCS_INDEX_BLOB,
@@ -71,31 +77,30 @@ class AEFIndex:
         Args:
             source: Data source (GCS or SOURCE_COOP)
             gcp_project: GCP project ID for requester-pays bucket access (GCS only)
-            cache_dir: Directory for caching the index (default: /tmp)
+            cache_dir: Directory for caching the index. Defaults to
+                :func:`aef_loader._cloud.default_cache_dir` (honours
+                ``XDG_CACHE_HOME``, otherwise ``~/.cache/aef-loader``).
         """
         self.source = source
         self.gcp_project = gcp_project
-        self.cache_dir = cache_dir or Path("/tmp")
+        self.cache_dir = cache_dir or default_cache_dir()
         self._gdf: gpd.GeoDataFrame | None = None
         self._index_path: Path | None = None
 
     @property
     def _cache_filename(self) -> str:
-        """Get cache filename based on data source."""
         if self.source == DataSource.SOURCE_COOP:
             return "aef_index_source_coop.parquet"
         return "aef_index_gcs.parquet"
 
     @property
     def _bucket(self) -> str:
-        """Get bucket name based on data source."""
         if self.source == DataSource.SOURCE_COOP:
             return SOURCE_COOP_BUCKET
         return GCS_BUCKET
 
     @property
     def _index_blob(self) -> str:
-        """Get index blob path based on data source."""
         if self.source == DataSource.SOURCE_COOP:
             return SOURCE_COOP_INDEX_BLOB
         return GCS_INDEX_BLOB
@@ -127,27 +132,12 @@ class AEFIndex:
             logger.info(
                 f"Downloading AEF index from s3://{self._bucket}/{self._index_blob}"
             )
-            store = S3Store(
-                bucket=self._bucket,
-                region=SOURCE_COOP_REGION,
-                skip_signature=True,  # Public bucket, no auth needed
-            )
+            store = make_s3_store(self._bucket, SOURCE_COOP_REGION)
         else:
-            # GCS - requires project for requester-pays
-            if not self.gcp_project:
-                raise ValueError(
-                    "gcp_project is required for downloading from GCS requester-pays bucket"
-                )
-
             logger.info(
                 f"Downloading AEF index from gs://{self._bucket}/{self._index_blob}"
             )
-            store = GCSStore(
-                bucket=self._bucket,
-                client_options={
-                    "default_headers": {"x-goog-user-project": self.gcp_project}
-                },
-            )
+            store = make_gcs_store(self._bucket, self.gcp_project)
 
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -185,25 +175,10 @@ class AEFIndex:
         logger.info(f"Loaded {len(self._gdf)} tiles from AEF index")
         return self._gdf
 
-    def _get_start_and_end_year(self, years: int | DateRange) -> tuple[int, int]:
-        if isinstance(years, int):
-            start_year = end_year = years
-            return start_year, end_year
-
-        start_year, end_year = years
-
-        # Handle string dates
-        if isinstance(start_year, str):
-            start_year = int(start_year[:4])
-        if isinstance(end_year, str):
-            end_year = int(end_year[:4])
-
-        return start_year, end_year
-
     async def query(
         self,
         bbox: BoundingBox | None = None,
-        years: int | DateRange | None = None,
+        years: int | str | DateRange | None = None,
         limit: int | None = None,
     ) -> list[AEFTileInfo]:
         """
@@ -223,20 +198,18 @@ class AEFIndex:
         assert self._gdf is not None, "Index not loaded"
         gdf = self._gdf.copy()
 
-        # Apply spatial filter
         if bbox:
             minx, miny, maxx, maxy = bbox
             bbox_geom = box(minx, miny, maxx, maxy)
             gdf = gdf[gdf.geometry.intersects(bbox_geom)]
             logger.info(f"After bbox filter: {len(gdf)} tiles")
 
-        # Apply temporal filter
         if years is not None:
-            start_year, end_year = self._get_start_and_end_year(years)
+            start_year, end_year = normalize_year_range(years)
             gdf = gdf[(gdf["year"] >= start_year) & (gdf["year"] <= end_year)]
             logger.info(f"After year filter: {len(gdf)} tiles")
 
-        if limit:
+        if limit is not None:
             gdf = gdf.head(limit)
 
         if len(gdf) == 0:
@@ -256,9 +229,7 @@ class AEFIndex:
                     row["wgs84_east"],
                     row["wgs84_north"],
                 ),
-                crs_epsg=int(row["crs"].split(":")[1])
-                if ":" in str(row["crs"])
-                else 4326,
+                crs_epsg=CRS.from_user_input(row["crs"]).to_epsg(),
                 utm_zone=row.get("utm_zone"),
                 utm_bounds=(
                     row["utm_west"],

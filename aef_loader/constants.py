@@ -24,3 +24,14 @@ SOURCE_COOP_INDEX_BLOB = "tge-labs/aef/v1/annual/aef_index.parquet"
 # Embeddings are stored as int8 and dequantized using: ((v/127.5)² × sign(v))
 AEF_DEQUANT_DIVISOR = 127.5
 AEF_NODATA_VALUE = -128
+
+
+# Forest Data Partnership (FDP) commodity probabilities
+# https://developers.google.com/earth-engine/guides/forest_data_partnership_gcs
+# Hosted on the Earth Engine public requester-pays bucket. Each leaf directory
+# contains 1°×1° EPSG:4326 float32 COGs named lng_{X}_lat_{Y}.tif where (X, Y)
+# is the SW corner (despite the public docs claiming NW — verified empirically).
+FDP_BUCKET = "earth-engine-public-requester-pays"
+FDP_PREFIX = "forestdatapartnership"
+FDP_DEFAULT_RELEASE = "2025b"
+FDP_TILE_SIZE_DEG = 1  # 1° × 1° tiles in EPSG:4326

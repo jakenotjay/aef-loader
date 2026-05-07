@@ -198,23 +198,3 @@ class TestAEFIndex:
         assert tile.year == 2022
         assert tile.crs_epsg == 32610
         assert tile.source == DataSource.GCS
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "years,expected",
-        [
-            (2024, (2024, 2024)),
-            ("2024", (2024, 2024)),
-            ("2024-06-01", (2024, 2024)),
-            ((2020, 2024), (2020, 2024)),
-            (("2020", "2024"), (2020, 2024)),
-            ((2020, "2024-12-31"), (2020, 2024)),
-            # Pin current pass-through behaviour for inverted ranges. Callers
-            # currently get an empty result silently — we can tighten the
-            # contract (raise / clamp) later if it becomes a footgun.
-            ((2024, 2020), (2024, 2020)),
-        ],
-    )
-    def test_get_start_and_end_year_normalises_inputs(self, years, expected):
-        index = AEFIndex(source=DataSource.GCS, cache_dir=Path("/nonexistent"))
-        assert index._get_start_and_end_year(years) == expected

@@ -8,7 +8,31 @@ import xarray as xr
 from aef_loader._cloud import (
     _affine_from_pixel_scale_and_tiepoint,
     get_geobox_from_dataset,
+    normalize_year_range,
 )
+
+
+class TestNormalizeYearRange:
+    """Shared year-range normalisation used by both AEFIndex and FDPIndex."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "years,expected",
+        [
+            (2024, (2024, 2024)),
+            ("2024", (2024, 2024)),
+            ("2024-06-01", (2024, 2024)),
+            ((2020, 2024), (2020, 2024)),
+            (("2020", "2024"), (2020, 2024)),
+            ((2020, "2024-12-31"), (2020, 2024)),
+            # Pin current pass-through behaviour for inverted ranges. Callers
+            # currently get an empty result silently — we can tighten the
+            # contract (raise / clamp) later if it becomes a footgun.
+            ((2024, 2020), (2024, 2020)),
+        ],
+    )
+    def test_normalises_inputs(self, years, expected):
+        assert normalize_year_range(years) == expected
 
 
 class TestAffineFromPixelScaleAndTiepoint:

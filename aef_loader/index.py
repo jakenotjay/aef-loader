@@ -14,7 +14,12 @@ import geopandas as gpd
 import obstore as obs
 from shapely.geometry import box
 
-from aef_loader._cloud import default_cache_dir, make_gcs_store, make_s3_store
+from aef_loader._cloud import (
+    default_cache_dir,
+    make_gcs_store,
+    make_s3_store,
+    normalize_year_range,
+)
 from aef_loader.constants import (
     GCS_BUCKET,
     GCS_INDEX_BLOB,
@@ -71,7 +76,9 @@ class AEFIndex:
         Args:
             source: Data source (GCS or SOURCE_COOP)
             gcp_project: GCP project ID for requester-pays bucket access (GCS only)
-            cache_dir: Directory for caching the index (default: /tmp)
+            cache_dir: Directory for caching the index. Defaults to
+                :func:`aef_loader._cloud.default_cache_dir` (honours
+                ``XDG_CACHE_HOME``, otherwise ``~/.cache/aef-loader``).
         """
         self.source = source
         self.gcp_project = gcp_project
@@ -170,25 +177,6 @@ class AEFIndex:
         logger.info(f"Loaded {len(self._gdf)} tiles from AEF index")
         return self._gdf
 
-    def _get_start_and_end_year(self, years: int | str | DateRange) -> tuple[int, int]:
-        """Normalise a year scalar or range into ``(start, end)`` ints.
-
-        Accepts ``2024``, ``"2024"``, ``"2024-06-01"``, ``(2020, 2024)``, or
-        any combination of int/string for the tuple form (matching
-        :class:`aef_loader.types.DateRange`).
-        """
-        if isinstance(years, int):
-            return years, years
-        if isinstance(years, str):
-            y = int(years[:4])
-            return y, y
-        start_year, end_year = years
-        if isinstance(start_year, str):
-            start_year = int(start_year[:4])
-        if isinstance(end_year, str):
-            end_year = int(end_year[:4])
-        return start_year, end_year
-
     async def query(
         self,
         bbox: BoundingBox | None = None,
@@ -221,7 +209,7 @@ class AEFIndex:
 
         # Apply temporal filter
         if years is not None:
-            start_year, end_year = self._get_start_and_end_year(years)
+            start_year, end_year = normalize_year_range(years)
             gdf = gdf[(gdf["year"] >= start_year) & (gdf["year"] <= end_year)]
             logger.info(f"After year filter: {len(gdf)} tiles")
 

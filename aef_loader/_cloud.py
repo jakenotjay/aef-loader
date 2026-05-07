@@ -15,10 +15,34 @@ import xarray as xr
 from affine import Affine
 from obstore.store import GCSStore, S3Store
 
+from aef_loader.types import DateRange
+
 if TYPE_CHECKING:
     from odc.geo.geobox import GeoBox
 
 PathProtocol = Literal["gs", "s3"]
+
+
+def normalize_year_range(years: int | str | DateRange) -> tuple[int, int]:
+    """Normalise a year scalar or range into ``(start, end)`` ints.
+
+    Accepts ``2024``, ``"2024"``, ``"2024-06-01"``, ``(2020, 2024)``, or any
+    combination of int/string for the tuple form (matching
+    :class:`aef_loader.types.DateRange`). Inverted ranges (e.g. ``(2024,
+    2020)``) pass through unchanged — callers currently get an empty result
+    silently downstream. Tighten if it ever becomes a footgun.
+    """
+    if isinstance(years, int):
+        return years, years
+    if isinstance(years, str):
+        y = int(years[:4])
+        return y, y
+    start, end = years
+    if isinstance(start, str):
+        start = int(start[:4])
+    if isinstance(end, str):
+        end = int(end[:4])
+    return start, end
 
 
 def default_cache_dir() -> Path:

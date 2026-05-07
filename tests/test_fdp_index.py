@@ -260,22 +260,3 @@ class TestFDPIndex:
 
         gdf = index.load()
         assert set(zip(gdf["lng"], gdf["lat"])) == {(9, 5), (10, 5)}
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "years,expected",
-        [
-            (2024, (2024, 2024)),
-            ("2024", (2024, 2024)),
-            ("2024-06-01", (2024, 2024)),
-            ((2020, 2024), (2020, 2024)),
-            (("2020", "2024"), (2020, 2024)),
-            ((2020, "2024-12-31"), (2020, 2024)),
-            # Pin current pass-through behaviour for inverted ranges. Callers
-            # currently get an empty result silently — we can tighten the
-            # contract (raise / clamp) later if it becomes a footgun.
-            ((2024, 2020), (2024, 2020)),
-        ],
-    )
-    def test_year_range_normalises_inputs(self, years, expected):
-        assert FDPIndex._year_range(years) == expected

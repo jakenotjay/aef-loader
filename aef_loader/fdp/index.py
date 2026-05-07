@@ -132,7 +132,6 @@ class FDPIndex:
             )
         logger.info(f"Discovered commodities: {commodities}")
 
-        # Discover years per commodity in parallel.
         commodity_years = await asyncio.gather(
             *[self._discover_years(store, release_prefix, c) for c in commodities]
         )
@@ -141,7 +140,6 @@ class FDPIndex:
         ]
         logger.info(f"Listing {len(leaf_specs)} (commodity, year) leaves: {leaf_specs}")
 
-        # List every leaf concurrently and collect rows.
         per_leaf_rows = await asyncio.gather(
             *[
                 self._list_leaf_tiles(store, release_prefix, commodity, year)

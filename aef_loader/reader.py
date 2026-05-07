@@ -98,7 +98,6 @@ class VirtualTiffReader:
         self._registry = None
 
     def _get_store(self, protocol: PathProtocol, bucket: str):
-        """Get or create an obstore for a bucket based on protocol."""
         store_key = f"{protocol}://{bucket}"
         if store_key not in self._stores:
             if protocol == "gs":
@@ -110,14 +109,11 @@ class VirtualTiffReader:
         return self._stores[store_key]
 
     def _get_registry(self, protocol: PathProtocol, bucket: str):
-        """Get or create an ObjectStoreRegistry for a bucket."""
         if self._registry is None:
             self._registry = ObjectStoreRegistry()
-
         bucket_url = f"{protocol}://{bucket}/"
         store = self._get_store(protocol, bucket)
         self._registry.register(bucket_url, store)
-
         return self._registry
 
     async def open_tiles_by_zone(
@@ -165,7 +161,6 @@ class VirtualTiffReader:
         if not tiles:
             raise ValueError("No tiles provided")
 
-        # Group tiles by UTM zone
         tiles_by_zone: dict[str, list[AEFTileInfo]] = defaultdict(list)
         for tile in tiles:
             zone = tile.utm_zone or "unknown"
@@ -176,32 +171,19 @@ class VirtualTiffReader:
             f"{list(tiles_by_zone.keys())}"
         )
 
-        # Process each zone
         zone_datasets: dict[str, xr.Dataset] = {}
         for zone, zone_tiles in tiles_by_zone.items():
             logger.info(f"Processing zone {zone}: {len(zone_tiles)} tiles")
-
-            # Combine tiles within the zone
             ds = await self._combine_tiles_single_zone(zone_tiles, ifd, chunks=chunks)
-
-            # Add CRS metadata using odc-geo
-            crs = f"EPSG:{zone_tiles[0].crs_epsg}"
-            ds = assign_crs(ds, crs)
-
-            # Add zone metadata
+            ds = assign_crs(ds, f"EPSG:{zone_tiles[0].crs_epsg}")
             ds.attrs["utm_zone"] = zone
             ds.attrs["num_tiles"] = len(zone_tiles)
-
             zone_datasets[zone] = ds
 
-        # Build DataTree
         tree_dict = {f"/{zone}": ds for zone, ds in zone_datasets.items()}
         tree = DataTree.from_dict(tree_dict)
-
-        # Add root attributes
         tree.attrs["total_tiles"] = len(tiles)
         tree.attrs["zones"] = list(zone_datasets.keys())
-
         return tree
 
     async def _combine_tiles_single_zone(
@@ -237,28 +219,19 @@ class VirtualTiffReader:
                 mask_and_scale=False,
             )
 
-            # Extract GeoBox from the model_transformation in the TIFF
-            # This correctly handles bottom-up images (positive y scale)
-            crs = f"EPSG:{tile.crs_epsg}"
-            geobox = get_geobox_from_dataset(ds, crs)
+            geobox = get_geobox_from_dataset(ds, f"EPSG:{tile.crs_epsg}")
 
-            # Assign spatial coordinates from the actual TIFF affine. Pass
-            # the xr_coords dict straight through to preserve the coord
-            # DataArrays' attrs (axis, standard_name, the spatial_ref CRS
-            # coord) rather than stripping to bare .values.
+            # Pass xr_coords straight through to preserve the coord DataArrays'
+            # attrs (axis, standard_name, the spatial_ref CRS coord) rather
+            # than stripping to bare .values.
             ds = ds.assign_coords(xr_coords(geobox))
-
-            # Expand time as a dimension
             ds = ds.expand_dims(time=[tile.as_datetime])
-
             ds.attrs["_source_url"] = file_url
             ds.attrs["_tile_id"] = tile.id
-
             return ds
 
         datasets = await asyncio.gather(*[process_tile(tile) for tile in tiles])
 
-        # Group by time
         datasets_by_time: dict[dt.datetime, list[xr.Dataset]] = defaultdict(list)
         for ds in datasets:
             time_val = ds.coords["time"].values[0]
@@ -267,11 +240,9 @@ class VirtualTiffReader:
             )
             datasets_by_time[time_key].append(ds)
 
-        # Combine spatially within each time, then temporally
         time_slices = []
         for time_val in sorted(datasets_by_time.keys()):
             time_datasets = datasets_by_time[time_val]
-
             if len(time_datasets) == 1:
                 spatial_combined = time_datasets[0]
             else:
@@ -295,11 +266,9 @@ class VirtualTiffReader:
                 combine_attrs="drop_conflicts",
             )
 
-        # Keep bands as a single variable with string band coordinates
         if "band" in combined.dims:
             data_var = list(combined.data_vars)[0]
             da = combined[data_var]
-            # Assign string band coordinate labels (A00, A01, ..., A63)
             band_names = [f"A{i:02d}" for i in range(da.sizes["band"])]
             da = da.assign_coords(band=band_names)
             da.name = "embeddings"

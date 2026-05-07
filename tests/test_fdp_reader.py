@@ -17,11 +17,6 @@ from rasterio.transform import from_origin
 from xarray import DataTree
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _make_synthetic_tile_ds(
     *,
     x_start: float,
@@ -112,11 +107,6 @@ def _write_synthetic_cog(
         dst.set_band_description(1, "probability")
 
 
-# ---------------------------------------------------------------------------
-# Context manager + store wiring
-# ---------------------------------------------------------------------------
-
-
 class TestFDPReader:
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -157,13 +147,6 @@ class TestFDPReader:
         reader = FDPReader(gcp_project="p")
         with pytest.raises(ValueError, match="only supports gs"):
             reader._get_store("s3", "my-bucket")
-
-
-# ---------------------------------------------------------------------------
-# _open_tile — exercises the full virtual-tiff → xarray → geobox pipeline
-# against a synthetic on-disk COG, using obstore's LocalStore so no GCS is
-# touched. Pins the y-orientation fix end-to-end.
-# ---------------------------------------------------------------------------
 
 
 class TestGeoboxFromTile:
@@ -293,11 +276,6 @@ class TestOpenTile:
                 await reader._open_tile(tile, parser=parser, chunks=None)
 
 
-# ---------------------------------------------------------------------------
-# _combine_opened_datasets — pure xarray, no IO
-# ---------------------------------------------------------------------------
-
-
 class TestCombineOpenedDatasets:
     @pytest.mark.unit
     def test_outer_join_unions_contiguous_tiles(self):
@@ -385,11 +363,6 @@ class TestCombineOpenedDatasets:
         )
 
 
-# ---------------------------------------------------------------------------
-# open() — tile grouping behaviour
-# ---------------------------------------------------------------------------
-
-
 class TestOpen:
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -456,15 +429,10 @@ class TestOpen:
         assert set(tree.attrs["commodities"]) == {"coffee", "cocoa"}
 
 
-# ---------------------------------------------------------------------------
-# Integration — hits real GCS. Skip cleanly without creds.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.slow
 @pytest.mark.requires_gcp
 class TestFDPReaderIntegration:
-    """Run with: GCP_PROJECT=epoch-geospatial-dev uv run pytest -m slow"""
+    """Run with: GCP_PROJECT=<your-project> uv run pytest -m slow"""
 
     @pytest.fixture(scope="class")
     def gcp_project(self):

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import obstore as obs
+from pyproj import CRS
 from shapely.geometry import box
 
 from aef_loader._cloud import (
@@ -88,21 +89,18 @@ class AEFIndex:
 
     @property
     def _cache_filename(self) -> str:
-        """Get cache filename based on data source."""
         if self.source == DataSource.SOURCE_COOP:
             return "aef_index_source_coop.parquet"
         return "aef_index_gcs.parquet"
 
     @property
     def _bucket(self) -> str:
-        """Get bucket name based on data source."""
         if self.source == DataSource.SOURCE_COOP:
             return SOURCE_COOP_BUCKET
         return GCS_BUCKET
 
     @property
     def _index_blob(self) -> str:
-        """Get index blob path based on data source."""
         if self.source == DataSource.SOURCE_COOP:
             return SOURCE_COOP_INDEX_BLOB
         return GCS_INDEX_BLOB
@@ -200,14 +198,12 @@ class AEFIndex:
         assert self._gdf is not None, "Index not loaded"
         gdf = self._gdf.copy()
 
-        # Apply spatial filter
         if bbox:
             minx, miny, maxx, maxy = bbox
             bbox_geom = box(minx, miny, maxx, maxy)
             gdf = gdf[gdf.geometry.intersects(bbox_geom)]
             logger.info(f"After bbox filter: {len(gdf)} tiles")
 
-        # Apply temporal filter
         if years is not None:
             start_year, end_year = normalize_year_range(years)
             gdf = gdf[(gdf["year"] >= start_year) & (gdf["year"] <= end_year)]
@@ -233,9 +229,7 @@ class AEFIndex:
                     row["wgs84_east"],
                     row["wgs84_north"],
                 ),
-                crs_epsg=int(row["crs"].split(":")[1])
-                if ":" in str(row["crs"])
-                else 4326,
+                crs_epsg=CRS.from_user_input(row["crs"]).to_epsg(),
                 utm_zone=row.get("utm_zone"),
                 utm_bounds=(
                     row["utm_west"],

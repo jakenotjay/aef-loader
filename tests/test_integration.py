@@ -52,21 +52,23 @@ class TestSourceCoopIntegration:
     """Integration tests against the Source Cooperative S3 backend (public)."""
 
     @pytest.fixture(scope="class")
-    def source_coop_index(self, cache_dir):
-        return AEFIndex(source=DataSource.SOURCE_COOP, cache_dir=cache_dir)
+    async def source_coop_index(self, cache_dir):
+        index = AEFIndex(source=DataSource.SOURCE_COOP, cache_dir=cache_dir)
+        await index.download()
+        index.load()
+        return index
 
     @pytest.mark.asyncio
     async def test_download_index(self, source_coop_index):
-        """Download parquet index from S3 — file exists and is non-empty."""
-        path = await source_coop_index.download()
-
+        """Index was downloaded and loaded by fixture — file exists and is non-empty."""
+        path = source_coop_index._index_path
+        assert path is not None
         assert path.exists()
         assert path.stat().st_size > 0
 
     @pytest.mark.asyncio
     async def test_query_index(self, source_coop_index):
-        """Load index, query bbox+year — tiles have s3:// paths and SOURCE_COOP source."""
-        source_coop_index.load()
+        """Query bbox+year — tiles have s3:// paths and SOURCE_COOP source."""
         tiles = await source_coop_index.query(bbox=BBOX, years=YEAR)
 
         assert len(tiles) > 0
@@ -78,7 +80,6 @@ class TestSourceCoopIntegration:
     @pytest.mark.asyncio
     async def test_virtual_load_tile(self, source_coop_index):
         """Open 1 tile via open_tiles_by_zone — DataTree with zone children, single embeddings var."""
-        source_coop_index.load()
         tiles = await source_coop_index.query(bbox=BBOX, years=YEAR, limit=1)
         assert len(tiles) == 1
 
@@ -104,7 +105,6 @@ class TestSourceCoopIntegration:
     @pytest.mark.asyncio
     async def test_load_single_chunk(self, source_coop_index):
         """Compute a 256x256 chunk of embeddings band 0 — shape and int8 dtype."""
-        source_coop_index.load()
         tiles = await source_coop_index.query(bbox=BBOX, years=YEAR, limit=1)
         assert len(tiles) == 1
 
@@ -124,6 +124,71 @@ class TestSourceCoopIntegration:
         assert chunk.shape == (256, 256)
         assert chunk.dtype == np.int8
 
+    @pytest.mark.asyncio
+    async def test_selective_band_loading(self, source_coop_index):
+        """Load only bands [0, 3, 63] — dataset has exactly those bands, correctly named."""
+        tiles = await source_coop_index.query(bbox=BBOX, years=YEAR, limit=1)
+        assert len(tiles) == 1
+
+        selected = [0, 3, 63]
+        async with VirtualTiffReader() as reader:
+            tree = await reader.open_tiles_by_zone(tiles, bands=selected)
+
+        zone_name = list(tree.children.keys())[0]
+        ds = tree[zone_name].ds
+
+        assert "embeddings" in ds.data_vars
+        assert ds.sizes["band"] == 3
+        assert list(ds.coords["band"].values) == ["A00", "A03", "A63"]
+
+        # Compute a small chunk to verify data is actually readable
+        chunk = (
+            ds["embeddings"]
+            .sel(band="A03")
+            .isel(time=0, y=slice(0, 256), x=slice(0, 256))
+            .compute()
+        )
+        assert chunk.shape == (256, 256)
+        assert chunk.dtype == np.int8
+
+    @pytest.mark.asyncio
+    async def test_selective_band_loading_by_name(self, source_coop_index):
+        """Load bands by name — same result as by index."""
+        tiles = await source_coop_index.query(bbox=BBOX, years=YEAR, limit=1)
+        assert len(tiles) == 1
+
+        async with VirtualTiffReader() as reader:
+            tree = await reader.open_tiles_by_zone(tiles, bands=["A00", "A03", "A63"])
+
+        zone_name = list(tree.children.keys())[0]
+        ds = tree[zone_name].ds
+
+        assert ds.sizes["band"] == 3
+        assert list(ds.coords["band"].values) == ["A00", "A03", "A63"]
+
+    @pytest.mark.asyncio
+    async def test_selective_bands_match_full_load(self, source_coop_index):
+        """Selected bands produce identical data to loading all 64 then slicing."""
+        tiles = await source_coop_index.query(bbox=BBOX, years=YEAR, limit=1)
+        assert len(tiles) == 1
+
+        selected = [0, 3, 63]
+        band_names = ["A00", "A03", "A63"]
+        roi = dict(time=0, y=slice(0, 256), x=slice(0, 256))
+
+        async with VirtualTiffReader() as reader:
+            tree_full = await reader.open_tiles_by_zone(tiles)
+            tree_subset = await reader.open_tiles_by_zone(tiles, bands=selected)
+
+        zone = list(tree_full.children.keys())[0]
+        full_ds = tree_full[zone].ds
+        subset_ds = tree_subset[zone].ds
+
+        for name in band_names:
+            full_chunk = full_ds["embeddings"].sel(band=name).isel(**roi).compute()
+            subset_chunk = subset_ds["embeddings"].sel(band=name).isel(**roi).compute()
+            np.testing.assert_array_equal(full_chunk.values, subset_chunk.values)
+
 
 # ---------------------------------------------------------------------------
 # GCS (requester-pays)
@@ -136,25 +201,27 @@ class TestGCSIntegration:
     """Integration tests against the GCS requester-pays backend."""
 
     @pytest.fixture(scope="class")
-    def gcs_index(self, cache_dir, gcp_project):
-        return AEFIndex(
+    async def gcs_index(self, cache_dir, gcp_project):
+        index = AEFIndex(
             source=DataSource.GCS,
             gcp_project=gcp_project,
             cache_dir=cache_dir,
         )
+        await index.download()
+        index.load()
+        return index
 
     @pytest.mark.asyncio
     async def test_download_index(self, gcs_index):
-        """Download parquet index from GCS — file exists and is non-empty."""
-        path = await gcs_index.download()
-
+        """Index was downloaded and loaded by fixture — file exists and is non-empty."""
+        path = gcs_index._index_path
+        assert path is not None
         assert path.exists()
         assert path.stat().st_size > 0
 
     @pytest.mark.asyncio
     async def test_query_index(self, gcs_index):
-        """Load index, query bbox+year — tiles have gs:// paths and GCS source."""
-        gcs_index.load()
+        """Query bbox+year — tiles have gs:// paths and GCS source."""
         tiles = await gcs_index.query(bbox=BBOX, years=YEAR)
 
         assert len(tiles) > 0
@@ -166,7 +233,6 @@ class TestGCSIntegration:
     @pytest.mark.asyncio
     async def test_virtual_load_tile(self, gcs_index, gcp_project):
         """Open 1 tile via open_tiles_by_zone — DataTree with zone children, single embeddings var."""
-        gcs_index.load()
         tiles = await gcs_index.query(bbox=BBOX, years=YEAR, limit=1)
         assert len(tiles) == 1
 
@@ -189,7 +255,6 @@ class TestGCSIntegration:
     @pytest.mark.asyncio
     async def test_load_single_chunk(self, gcs_index, gcp_project):
         """Compute a 256x256 chunk of embeddings band 0 — shape and int8 dtype."""
-        gcs_index.load()
         tiles = await gcs_index.query(bbox=BBOX, years=YEAR, limit=1)
         assert len(tiles) == 1
 

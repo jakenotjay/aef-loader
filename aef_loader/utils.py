@@ -22,6 +22,40 @@ if TYPE_CHECKING:
     from odc.geo.geobox import GeoBox
 
 
+def _build_dequant_lut(
+    divisor: float = AEF_DEQUANT_DIVISOR,
+    nodata_value: int = AEF_NODATA_VALUE,
+) -> np.ndarray:
+    """256-entry int8-to-float32 dequantization lookup table."""
+    values = np.arange(-128, 128, dtype=np.float32)
+    lut = (values / divisor) ** 2 * np.sign(values)
+    lut[nodata_value + 128] = np.nan
+    return lut
+
+
+_DEQUANT_LUT = _build_dequant_lut()
+
+
+def _dequantize_lut(
+    data: np.ndarray,
+    divisor: float = AEF_DEQUANT_DIVISOR,
+    nodata_value: int = AEF_NODATA_VALUE,
+) -> np.ndarray:
+    """Dequantize a raw int8-compatible array via a lookup table."""
+    lut = (
+        _DEQUANT_LUT
+        if divisor == AEF_DEQUANT_DIVISOR and nodata_value == AEF_NODATA_VALUE
+        else _build_dequant_lut(divisor, nodata_value)
+    )
+    array = np.asarray(data)
+    if np.issubdtype(array.dtype, np.floating):
+        result = np.full(array.shape, np.nan, dtype=np.float32)
+        finite = np.isfinite(array)
+        result[finite] = lut[array[finite].astype(np.int16) + 128]
+        return result
+    return lut[array.astype(np.int16) + 128]
+
+
 def dequantize_aef(
     data: np.ndarray | xr.DataArray | xr.Dataset,
     divisor: float = AEF_DEQUANT_DIVISOR,
@@ -59,29 +93,21 @@ def dequantize_aef(
     if isinstance(data, xr.Dataset):
         return data.map(lambda x: dequantize_aef(x, divisor, nodata_value))
 
-    # Create nodata mask before conversion
-    nodata_mask = data == nodata_value
-
-    # Apply the correct formula: (v/127.5)² × sign(v)
-    normalized = data.astype(np.float32) / divisor
-    dequantized = (normalized**2) * np.sign(data)
-
-    # Apply nodata mask (convert -128 to NaN)
     if isinstance(data, xr.DataArray):
-        dequantized = xr.where(nodata_mask, np.nan, dequantized)
-        result = xr.DataArray(
-            dequantized,
-            dims=data.dims,
-            coords=data.coords,
-            attrs=data.attrs.copy(),
+        result = xr.apply_ufunc(
+            _dequantize_lut,
+            data,
+            kwargs={"divisor": divisor, "nodata_value": nodata_value},
+            dask="parallelized",
+            output_dtypes=[np.float32],
+            keep_attrs=True,
         )
+        result.attrs = data.attrs.copy()
         result.attrs["units"] = "embedding"
         result.attrs["dequantized"] = True
         return set_aef_nodata(result, nodata=np.nan)
-    else:
-        dequantized = np.where(nodata_mask, np.nan, dequantized)
 
-    return dequantized
+    return _dequantize_lut(data, divisor, nodata_value)
 
 
 def quantize_aef(

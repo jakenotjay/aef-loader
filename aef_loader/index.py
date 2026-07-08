@@ -200,19 +200,34 @@ class AEFIndex:
 
         return start_year, end_year
 
+    @staticmethod
+    def _bbox_to_wgs84(bbox: BoundingBox, bbox_crs: str) -> BoundingBox:
+        """Reproject a bbox to WGS84, densifying edges for projected CRSs."""
+        from pyproj import CRS, Transformer
+
+        if CRS.from_user_input(bbox_crs) == CRS.from_epsg(4326):
+            return bbox
+
+        transformer = Transformer.from_crs(bbox_crs, "EPSG:4326", always_xy=True)
+        return transformer.transform_bounds(*bbox, densify_pts=21)
+
     async def query(
         self,
         bbox: BoundingBox | None = None,
         years: int | DateRange | None = None,
         limit: int | None = None,
+        bbox_crs: str = "EPSG:4326",
     ) -> list[AEFTileInfo]:
         """
         Query the index for tiles matching the given criteria.
 
         Args:
-            bbox: Bounding box filter (minx, miny, maxx, maxy) in WGS84
+            bbox: Bounding box filter (minx, miny, maxx, maxy) in bbox_crs
             years: Single year or (start_year, end_year) tuple
             limit: Maximum number of tiles to return
+            bbox_crs: CRS of bbox. Defaults to WGS84, matching the index geometry.
+                For projected CRSs, bbox edges are densified before reprojection so
+                the WGS84 envelope covers bowed projected edges, not just corners.
 
         Returns:
             List of AEFTileInfo objects matching the query
@@ -225,7 +240,7 @@ class AEFIndex:
 
         # Apply spatial filter
         if bbox:
-            minx, miny, maxx, maxy = bbox
+            minx, miny, maxx, maxy = self._bbox_to_wgs84(bbox, bbox_crs)
             bbox_geom = box(minx, miny, maxx, maxy)
             gdf = gdf[gdf.geometry.intersects(bbox_geom)]
             logger.info(f"After bbox filter: {len(gdf)} tiles")

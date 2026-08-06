@@ -209,3 +209,5 @@ __marimo__/
 # Benchmark artifacts
 .benchmarks/
 benchmark_results.json
+# roborev snapshots
+/.roborev/

@@ -90,7 +90,9 @@ class TestAEFIndex:
         wgs84_tiles = await index.query(bbox=wgs84_bbox)
         projected_tiles = await index.query(bbox=projected_bbox, bbox_crs="EPSG:32610")
 
-        assert [tile.id for tile in projected_tiles] == [tile.id for tile in wgs84_tiles]
+        assert [tile.id for tile in projected_tiles] == [
+            tile.id for tile in wgs84_tiles
+        ]
 
     @pytest.mark.unit
     def test_projected_bbox_uses_densified_bounds(self):

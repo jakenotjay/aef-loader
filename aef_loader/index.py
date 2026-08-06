@@ -13,6 +13,7 @@ from pathlib import Path
 import geopandas as gpd
 import obstore as obs
 from obstore.store import GCSStore, S3Store
+from pyproj import CRS, Transformer
 from shapely.geometry import box
 
 from aef_loader.constants import (
@@ -201,14 +202,14 @@ class AEFIndex:
         return start_year, end_year
 
     @staticmethod
-    def _bbox_to_wgs84(bbox: BoundingBox, bbox_crs: str) -> BoundingBox:
+    def _bbox_to_wgs84(bbox: BoundingBox, bbox_crs: str | int) -> BoundingBox:
         """Reproject a bbox to WGS84, densifying edges for projected CRSs."""
-        from pyproj import CRS, Transformer
-
         if CRS.from_user_input(bbox_crs) == CRS.from_epsg(4326):
             return bbox
 
         transformer = Transformer.from_crs(bbox_crs, "EPSG:4326", always_xy=True)
+        # A bbox that crosses the antimeridian returns minx > maxx here. This
+        # case is not handled and would produce an empty spatial filter.
         return transformer.transform_bounds(*bbox, densify_pts=21)
 
     async def query(
@@ -216,7 +217,7 @@ class AEFIndex:
         bbox: BoundingBox | None = None,
         years: int | DateRange | None = None,
         limit: int | None = None,
-        bbox_crs: str = "EPSG:4326",
+        bbox_crs: str | int = "EPSG:4326",
     ) -> list[AEFTileInfo]:
         """
         Query the index for tiles matching the given criteria.
@@ -225,9 +226,10 @@ class AEFIndex:
             bbox: Bounding box filter (minx, miny, maxx, maxy) in bbox_crs
             years: Single year or (start_year, end_year) tuple
             limit: Maximum number of tiles to return
-            bbox_crs: CRS of bbox. Defaults to WGS84, matching the index geometry.
-                For projected CRSs, bbox edges are densified before reprojection so
-                the WGS84 envelope covers bowed projected edges, not just corners.
+            bbox_crs: CRS of bbox as an EPSG string or int. Defaults to WGS84,
+                matching the index geometry. For projected CRSs, bbox edges are
+                densified before reprojection so the WGS84 envelope covers bowed
+                projected edges, not just corners.
 
         Returns:
             List of AEFTileInfo objects matching the query

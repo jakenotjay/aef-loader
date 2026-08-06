@@ -24,3 +24,5 @@ SOURCE_COOP_INDEX_BLOB = "tge-labs/aef/v1/annual/aef_index.parquet"
 # Embeddings are stored as int8 and dequantized using: ((v/127.5)² × sign(v))
 AEF_DEQUANT_DIVISOR = 127.5
 AEF_NODATA_VALUE = -128
+
+AEF_COG_BLOCK_SIZE = 1024

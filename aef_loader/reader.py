@@ -26,7 +26,7 @@ from virtual_tiff import VirtualTIFF
 from virtualizarr.registry import ObjectStoreRegistry
 from xarray import DataTree
 
-from aef_loader.constants import SOURCE_COOP_REGION
+from aef_loader.constants import AEF_COG_BLOCK_SIZE, SOURCE_COOP_REGION
 from aef_loader.utils import set_aef_nodata
 
 if TYPE_CHECKING:
@@ -35,6 +35,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 PathProtocol = Literal["gs", "s3"]
+
+# There's almost never a case we want bands to be on different workers, band -1
+# guarantees we operate on all bands per worker.
+DEFAULT_CHUNKS: dict[str, int] = {
+    "band": -1,
+    "y": AEF_COG_BLOCK_SIZE,
+    "x": AEF_COG_BLOCK_SIZE,
+}
 
 
 def _parse_gcs_path(path: str) -> tuple[str, str]:
@@ -254,7 +262,7 @@ class VirtualTiffReader:
         self,
         tiles: list[AEFTileInfo],
         ifd: int = 0,
-        chunks: int | dict | Literal["auto"] | None = "auto",
+        chunks: int | dict | Literal["auto"] | None = DEFAULT_CHUNKS,
     ) -> DataTree:
         """
         Open tiles and organize them by UTM zone in a DataTree.
@@ -272,8 +280,7 @@ class VirtualTiffReader:
         Args:
             tiles: List of AEFTileInfo objects from AEFIndex.query()
             ifd: Image File Directory index (0 for full resolution)
-            chunks: The chunks parameter to pass to open_zarr, defaults to auto,
-                useful to pass None to stop dask task explosions
+            chunks: the chunks to pass to open_zarr
 
         Returns:
             DataTree with structure:
@@ -338,7 +345,7 @@ class VirtualTiffReader:
         self,
         tiles: list[AEFTileInfo],
         ifd: int = 0,
-        chunks: int | dict | Literal["auto"] | None = "auto",
+        chunks: int | dict | Literal["auto"] | None = DEFAULT_CHUNKS,
     ) -> xr.Dataset:
         """
         Combine tiles within a single UTM zone.

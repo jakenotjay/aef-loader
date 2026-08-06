@@ -1,5 +1,6 @@
 """Tests for aef_loader.utils module."""
 
+import dask.array as dask_array
 import numpy as np
 import pytest
 import xarray as xr
@@ -41,6 +42,20 @@ class TestDequantizeAef:
         assert np.isnan(result[5])
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("dtype", [np.int8, np.int16])
+    def test_dequantize_numpy_array_matches_formula_for_all_int8_values(self, dtype):
+        """Test LUT dequantization matches the reference formula for every int8 value."""
+        quantized = np.arange(-128, 128, dtype=np.int16).astype(dtype)
+
+        result = dequantize_aef(quantized)
+
+        normalized = quantized.astype(np.float32) / 127.5
+        expected = (normalized**2) * np.sign(quantized)
+        expected = np.where(quantized == -128, np.nan, expected)
+        np.testing.assert_array_equal(result, expected)
+        assert result.dtype == np.float32
+
+    @pytest.mark.unit
     def test_dequantize_xarray_dataarray(self):
         """Test dequantization of xarray DataArray sets expected attrs."""
         data = np.array([127, -127, 0], dtype=np.int8)
@@ -50,6 +65,38 @@ class TestDequantizeAef:
 
         assert result.dtype == np.float32
         assert result.attrs["dequantized"] is True
+
+    @pytest.mark.unit
+    def test_dequantize_dask_dataarray_uses_lazy_lut(self):
+        """Test dequantization of a dask-backed DataArray stays lazy and correct."""
+        data = dask_array.from_array(
+            np.array([127, -127, 0, -128], dtype=np.int8), chunks=2
+        )
+        da = xr.DataArray(data, dims=["x"])
+
+        result = dequantize_aef(da)
+
+        assert isinstance(result.data, dask_array.Array)
+        assert result.chunks == ((2, 2),)
+        computed = result.compute()
+        expected = dequantize_aef(np.array([127, -127, 0, -128], dtype=np.int8))
+        np.testing.assert_array_equal(computed.values, expected)
+
+    @pytest.mark.unit
+    def test_dequantize_dask_dataarray_preserves_float_nan_gap_fill(self):
+        """Test float NaN gap-fill chunks stay NaN when dequantized lazily."""
+        data = dask_array.from_array(
+            np.array([127.0, np.nan, -128.0, 0.0], dtype=np.float32), chunks=2
+        )
+        da = xr.DataArray(data, dims=["x"])
+
+        result = dequantize_aef(da)
+
+        computed = result.compute()
+        expected = np.array(
+            [((127 / 127.5) ** 2), np.nan, np.nan, 0.0], dtype=np.float32
+        )
+        np.testing.assert_array_equal(computed.values, expected)
 
     @pytest.mark.unit
     def test_dequantize_nodata_attrs(self):

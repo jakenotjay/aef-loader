@@ -7,6 +7,7 @@ import pytest
 from aef_loader.constants import DataSource
 from aef_loader.index import AEFIndex
 from aef_loader.types import AEFTileInfo
+from pyproj import Transformer
 
 
 class TestAEFIndex:
@@ -71,6 +72,60 @@ class TestAEFIndex:
 
         assert len(tiles) == 2
         assert all(isinstance(t, AEFTileInfo) for t in tiles)
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_query_with_projected_bbox_crs(self, tmp_path, mock_gdf):
+        """Test querying with a bbox supplied in a projected CRS."""
+        index_path = tmp_path / "aef_index_gcs.parquet"
+        mock_gdf.to_parquet(index_path)
+
+        index = AEFIndex(source=DataSource.GCS, cache_dir=tmp_path)
+        index.load()
+
+        wgs84_bbox = (-122.5, 37.5, -122.15, 37.7)
+        transformer = Transformer.from_crs("EPSG:4326", "EPSG:32610", always_xy=True)
+        projected_bbox = transformer.transform_bounds(*wgs84_bbox, densify_pts=21)
+
+        wgs84_tiles = await index.query(bbox=wgs84_bbox)
+        projected_tiles = await index.query(bbox=projected_bbox, bbox_crs="EPSG:32610")
+
+        assert [tile.id for tile in projected_tiles] == [
+            tile.id for tile in wgs84_tiles
+        ]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_query_with_int_bbox_crs(self, tmp_path, mock_gdf):
+        """Test querying with bbox_crs supplied as an int EPSG code."""
+        index_path = tmp_path / "aef_index_gcs.parquet"
+        mock_gdf.to_parquet(index_path)
+
+        index = AEFIndex(source=DataSource.GCS, cache_dir=tmp_path)
+        index.load()
+
+        wgs84_bbox = (-122.5, 37.5, -122.15, 37.7)
+        transformer = Transformer.from_crs("EPSG:4326", "EPSG:32610", always_xy=True)
+        projected_bbox = transformer.transform_bounds(*wgs84_bbox, densify_pts=21)
+
+        str_tiles = await index.query(bbox=projected_bbox, bbox_crs="EPSG:32610")
+        int_tiles = await index.query(bbox=projected_bbox, bbox_crs=32610)
+
+        assert [tile.id for tile in int_tiles] == [tile.id for tile in str_tiles]
+
+    @pytest.mark.unit
+    def test_projected_bbox_uses_densified_bounds(self):
+        """Test projected bbox conversion covers bowed edges beyond corner-only bounds."""
+        bbox = (300000, 6600000, 700000, 7600000)
+        transformer = Transformer.from_crs("EPSG:32631", "EPSG:4326", always_xy=True)
+        x_coords = [bbox[0], bbox[0], bbox[2], bbox[2]]
+        y_coords = [bbox[1], bbox[3], bbox[1], bbox[3]]
+        corner_lons, corner_lats = transformer.transform(x_coords, y_coords)
+        corner_north = max(corner_lats)
+
+        densified = AEFIndex._bbox_to_wgs84(bbox, "EPSG:32631")
+
+        assert densified[3] > corner_north
 
     @pytest.mark.unit
     @pytest.mark.asyncio

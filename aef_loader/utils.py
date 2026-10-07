@@ -36,6 +36,15 @@ def _build_dequant_lut(
 _DEQUANT_LUT = _build_dequant_lut()
 
 
+def _check_code_range(codes: np.ndarray) -> None:
+    """Raise if any quantized code falls outside the int8 range."""
+    if codes.size and (codes.min() < -128 or codes.max() > 127):
+        raise ValueError(
+            "quantized values must be within [-128, 127]; got range "
+            f"[{codes.min()}, {codes.max()}]"
+        )
+
+
 def _dequantize_lut(
     data: np.ndarray,
     divisor: float = AEF_DEQUANT_DIVISOR,
@@ -49,10 +58,25 @@ def _dequantize_lut(
     )
     array = np.asarray(data)
     if np.issubdtype(array.dtype, np.floating):
+        # Float input is NaN-gap-filled raw codes (e.g. from an outer join). Any
+        # finite value that is not a whole code looks already dequantized and
+        # would otherwise be silently truncated to 0.
         result = np.full(array.shape, np.nan, dtype=np.float32)
         finite = np.isfinite(array)
-        result[finite] = lut[array[finite].astype(np.int16) + 128]
+        codes = array[finite]
+        if codes.size and (codes != np.round(codes)).any():
+            raise TypeError(
+                f"dequantize_aef expects integer-quantized data, got {array.dtype} "
+                "with non-integer values; float input looks already dequantized."
+            )
+        _check_code_range(codes)
+        result[finite] = lut[codes.astype(np.int16) + 128]
         return result
+    if array.dtype.kind not in "iu":
+        raise TypeError(
+            f"dequantize_aef expects integer-quantized data, got {array.dtype}."
+        )
+    _check_code_range(array)
     return lut[array.astype(np.int16) + 128]
 
 
@@ -130,16 +154,27 @@ def quantize_aef(
         data: Float32 embedding data in range [-1, 1]
         divisor: Quantization divisor (default: 127.5)
 
+    Non-finite inputs (NaN and +/-inf) are treated as nodata and written as
+    ``-128`` (AEF_NODATA_VALUE), so a dequantize/quantize round trip preserves
+    nodata instead of turning it into a valid zero code.
+
     Returns:
-        Quantized int8 data in range [-127, 127]
+        Quantized int8 data in range [-127, 127], with -128 for nodata
     """
+    finite = np.isfinite(data)
     sign = np.sign(data)
     magnitude = np.sqrt(np.abs(data))
     quantized = np.round(sign * magnitude * divisor)
 
     # Clamp to valid range [-127, 127] BEFORE casting to int8
     # This prevents overflow (128 -> -128 in int8)
-    quantized = np.clip(quantized, -127, 127).astype(np.int8)
+    quantized = np.clip(quantized, -127, 127)
+    # Replace non-finite values before the cast: NaN -> int8 is undefined.
+    if isinstance(data, xr.DataArray):
+        quantized = xr.where(finite, quantized, AEF_NODATA_VALUE)
+    else:
+        quantized = np.where(finite, quantized, AEF_NODATA_VALUE)
+    quantized = quantized.astype(np.int8)
 
     if isinstance(data, xr.DataArray):
         result = xr.DataArray(

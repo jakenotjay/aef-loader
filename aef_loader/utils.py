@@ -258,6 +258,37 @@ def split_bands(ds: xr.Dataset, var: str = "embeddings") -> xr.Dataset:
     return split
 
 
+def _align_zone_times(datasets: list[xr.Dataset]) -> list[xr.Dataset]:
+    """Outer-align ``time`` across zone datasets, filling gaps with each variable's nodata.
+
+    Zones can hold different year sets (e.g. a zone with no tile for one year).
+    Integer variables are filled with their ``nodata``/``_FillValue`` attr and
+    floats with NaN, so the zone merge below sees "no data" for the missing years.
+    """
+    if not all("time" in ds.dims for ds in datasets):
+        return datasets
+    indexes = [ds.indexes["time"] for ds in datasets]
+    if all(idx.equals(indexes[0]) for idx in indexes[1:]):
+        return datasets
+    union = indexes[0]
+    for idx in indexes[1:]:
+        union = union.union(idx, sort=None)
+
+    aligned = []
+    for ds in datasets:
+        fills = {}
+        for var in ds.data_vars:
+            nodata = ds[var].attrs.get("nodata", ds[var].attrs.get("_FillValue"))
+            integer = np.issubdtype(ds[var].dtype, np.integer)
+            fills[var] = int(nodata) if integer and nodata is not None else np.nan
+        attrs = {var: ds[var].attrs for var in ds.data_vars}
+        new = ds.reindex(time=union, fill_value=fills)
+        for var, var_attrs in attrs.items():
+            new[var].attrs = var_attrs
+        aligned.append(new)
+    return aligned
+
+
 def reproject_datatree(
     tree: DataTree,
     target_geobox: GeoBox,
@@ -343,6 +374,8 @@ def reproject_datatree(
 
     if len(reprojected_datasets) == 1:
         return reprojected_datasets[0]
+
+    reprojected_datasets = _align_zone_times(reprojected_datasets)
 
     # Merge with xr.where to preserve chunk structure.
     # combine_first triggers xr.align(join="outer") which reindexes the band

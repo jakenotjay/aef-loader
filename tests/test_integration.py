@@ -124,6 +124,50 @@ class TestSourceCoopIntegration:
         assert chunk.shape == (256, 256)
         assert chunk.dtype == np.int8
 
+    @pytest.mark.asyncio
+    async def test_overview_ifd_georeferencing(self, source_coop_index):
+        """ifd=3 overview opens, spans the same extent as ifd=0, and has real data."""
+        source_coop_index.load()
+        tiles = await source_coop_index.query(
+            bbox=(101.0, 0.4, 101.2, 0.6), years=2024, limit=1
+        )
+        assert len(tiles) == 1
+
+        async with VirtualTiffReader() as reader:
+            full = await reader.open_tiles_by_zone(tiles, ifd=0)
+            ovr = await reader.open_tiles_by_zone(tiles, ifd=3)
+
+        zone = list(full.children.keys())[0]
+        ds0, ds3 = full[zone].ds, ovr[zone].ds
+        assert ds3.sizes["x"] < ds0.sizes["x"]
+
+        def edges(ds):
+            dx = abs(float(ds.x[1] - ds.x[0]))
+            dy = abs(float(ds.y[1] - ds.y[0]))
+            return (
+                (
+                    float(ds.x.min()) - dx / 2,
+                    float(ds.x.max()) + dx / 2,
+                    float(ds.y.min()) - dy / 2,
+                    float(ds.y.max()) + dy / 2,
+                ),
+                dx,
+                dy,
+            )
+
+        b0, _, _ = edges(ds0)
+        b3, dx3, dy3 = edges(ds3)
+        tol = (dx3, dx3, dy3, dy3)
+        for a, b, t in zip(b0, b3, tol, strict=True):
+            assert abs(a - b) <= t
+
+        chunk = (
+            ds3["embeddings"]
+            .isel(time=0, y=slice(0, 64), x=slice(0, 64), band=slice(0, 4))
+            .compute()
+        )
+        assert (chunk.values != -128).any()
+
 
 # ---------------------------------------------------------------------------
 # GCS (requester-pays)

@@ -2,8 +2,15 @@
 
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
-from aef_loader.reader import VirtualTiffReader, _parse_gcs_path
+import xarray as xr
+from aef_loader.reader import (
+    VirtualTiffReader,
+    _get_geobox_from_dataset,
+    _get_overview_geobox,
+    _parse_gcs_path,
+)
 
 
 class TestParseGcsPath:
@@ -63,3 +70,66 @@ class TestVirtualTiffReader:
 
             mock_gcs.assert_not_called()
             assert store == mock_store
+
+
+def _make_ds(height: int, width: int, attrs: dict) -> xr.Dataset:
+    da = xr.DataArray(
+        np.zeros((1, height, width), dtype="int8"),
+        dims=("band", "y", "x"),
+        attrs=attrs,
+    )
+    return xr.Dataset({"0": da})
+
+
+class TestOverviewGeobox:
+    """Overview IFDs carry no georeferencing tags; derive it from IFD 0."""
+
+    @pytest.mark.unit
+    def test_overview_from_pixel_scale(self):
+        ds0 = _make_ds(
+            8192,
+            8192,
+            {
+                "model_pixel_scale": (10.0, 10.0, 0.0),
+                "model_tiepoint": (0, 0, 0, 500000.0, 100000.0, 0),
+            },
+        )
+        ds_ovr = _make_ds(1024, 1024, {})
+
+        gbox = _get_overview_geobox(ds_ovr, ds0, "EPSG:32647")
+
+        assert gbox.shape == (1024, 1024)
+        assert gbox.affine.a == pytest.approx(80.0)
+        assert gbox.affine.e == pytest.approx(80.0)
+        assert (gbox.affine.c, gbox.affine.f) == (500000.0, 100000.0)
+
+    @pytest.mark.unit
+    def test_overview_from_model_transformation_keeps_sign(self):
+        # bottom-up image: positive y scale
+        transform = (
+            10.0, 0, 0, 500000.0,
+            0, -10.0, 0, 200000.0,
+            0, 0, 0, 0,
+            0, 0, 0, 1,
+        )  # fmt: skip
+        ds0 = _make_ds(4096, 8192, {"model_transformation": transform})
+        ds_ovr = _make_ds(1024, 1024, {})
+
+        gbox = _get_overview_geobox(ds_ovr, ds0, "EPSG:32647")
+
+        assert gbox.affine.a == pytest.approx(80.0)
+        assert gbox.affine.e == pytest.approx(-40.0)
+        assert (gbox.affine.c, gbox.affine.f) == (500000.0, 200000.0)
+
+    @pytest.mark.unit
+    def test_same_dataset_unchanged(self):
+        attrs = {
+            "model_pixel_scale": (10.0, 10.0, 0.0),
+            "model_tiepoint": (0, 0, 0, 500000.0, 100000.0, 0),
+        }
+        ds0 = _make_ds(64, 64, attrs)
+
+        assert (
+            _get_overview_geobox(ds0, ds0, "EPSG:32647").affine
+            == _get_geobox_from_dataset(ds0, "EPSG:32647").affine
+        )

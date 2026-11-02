@@ -134,9 +134,15 @@ def _get_geobox_from_dataset(ds: xr.Dataset, crs: str) -> GeoBox:
     Returns:
         GeoBox with correct affine transformation
     """
-    height = ds.sizes["y"]
-    width = ds.sizes["x"]
+    return GeoBox(
+        shape=(ds.sizes["y"], ds.sizes["x"]),
+        affine=_get_affine_from_dataset(ds),
+        crs=crs,
+    )
 
+
+def _get_affine_from_dataset(ds: xr.Dataset) -> Affine:
+    """Read the pixel->CRS affine from the GeoTIFF tags in a dataset's attrs."""
     for var in ds.data_vars:
         attrs = ds[var].attrs
         if ("model_pixel_scale" in attrs) or "model_transformation" in attrs:
@@ -147,12 +153,29 @@ def _get_geobox_from_dataset(ds: xr.Dataset, crs: str) -> GeoBox:
         )
 
     if "model_pixel_scale" in attrs:
-        affine = _get_affine_from_model_pixel_scale_and_tiepoint(
+        return _get_affine_from_model_pixel_scale_and_tiepoint(
             attrs["model_pixel_scale"], attrs.get("model_tiepoint", [0, 0, 0, 0, 0, 0])
         )
-    else:
-        affine = _get_affine_from_model_transform(attrs["model_transformation"])
+    return _get_affine_from_model_transform(attrs["model_transformation"])
 
+
+def _get_overview_geobox(ds: xr.Dataset, ds_full: xr.Dataset, crs: str) -> GeoBox:
+    """Build the GeoBox for an overview IFD from the full-resolution (IFD 0) dataset.
+
+    In a COG only IFD 0 carries the GeoTIFF georeferencing tags; overview IFDs
+    have none. The overview covers the same extent with fewer pixels, so we scale
+    the IFD 0 pixel size by the ratio of the dimensions and keep the same origin
+    (pixel-corner registration). The sign of each axis scale is preserved.
+
+    Args:
+        ds: Overview dataset (supplies the shape)
+        ds_full: IFD 0 dataset (supplies the georeferencing attrs)
+        crs: CRS string (e.g., "EPSG:32610")
+    """
+    height, width = ds.sizes["y"], ds.sizes["x"]
+    affine = _get_affine_from_dataset(ds_full) * Affine.scale(
+        ds_full.sizes["x"] / width, ds_full.sizes["y"] / height
+    )
     return GeoBox(shape=(height, width), affine=affine, crs=crs)
 
 
@@ -356,6 +379,7 @@ class VirtualTiffReader:
         ``set_aef_nodata``.
         """
         parser = VirtualTIFF(ifd=ifd)
+        full_parser = VirtualTIFF(ifd=0)
 
         async def process_tile(tile: AEFTileInfo) -> xr.Dataset:
             protocol, bucket, key = _parse_cloud_path(tile.path)
@@ -377,7 +401,23 @@ class VirtualTiffReader:
             # Extract GeoBox from the model_transformation in the TIFF
             # This correctly handles bottom-up images (positive y scale)
             crs = f"EPSG:{tile.crs_epsg}"
-            geobox = _get_geobox_from_dataset(ds, crs)
+            if ifd == 0:
+                geobox = _get_geobox_from_dataset(ds, crs)
+            else:
+                # Overview IFDs have no georeferencing tags (only IFD 0 does),
+                # so derive the geobox from IFD 0 scaled to the overview shape.
+                full_store = await asyncio.to_thread(
+                    full_parser, url=file_url, registry=registry
+                )
+                ds_full: xr.Dataset = await asyncio.to_thread(
+                    xr.open_zarr,
+                    full_store,
+                    zarr_format=3,
+                    consolidated=False,
+                    chunks=None,
+                    mask_and_scale=False,
+                )
+                geobox = _get_overview_geobox(ds, ds_full, crs)
             coords = xr_coords(geobox)
 
             # Assign spatial coordinates from the actual TIFF affine
